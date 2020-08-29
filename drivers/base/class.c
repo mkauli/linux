@@ -401,6 +401,7 @@ struct device *class_find_device(struct class *class, struct device *start,
 {
 	struct class_dev_iter iter;
 	struct device *dev;
+	int counter = 0;
 
 	if (!class)
 		return NULL;
@@ -416,6 +417,7 @@ struct device *class_find_device(struct class *class, struct device *start,
 			get_device(dev);
 			break;
 		}
+		counter++;
 	}
 	class_dev_iter_exit(&iter);
 
@@ -576,6 +578,20 @@ int __init classes_init(void)
 		return -ENOMEM;
 	return 0;
 }
+
+//??PATCH martin@familie-kaul.de 2020-08-29
+struct class * class_find( const char * name )
+{
+	struct kobject *kobj = kset_find_obj(class_kset, name);
+	struct subsys_private *cp;
+
+	if( !kobj ) {
+		return NULL;
+	}
+	cp = to_subsys_private(kobj);
+	return cp->class;
+}
+EXPORT_SYMBOL_GPL(class_find);
 
 EXPORT_SYMBOL_GPL(class_create_file_ns);
 EXPORT_SYMBOL_GPL(class_remove_file_ns);
