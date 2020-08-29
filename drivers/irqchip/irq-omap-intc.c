@@ -297,6 +297,8 @@ static void __init omap_irq_enable_protection(void)
 static int __init omap_init_irq(u32 base, struct device_node *node)
 {
 	int ret;
+	//??PATCH martin@familie-kaul.de set threshold level of all interrupts
+	int i;
 
 	/*
 	 * FIXME legacy OMAP DMA driver sitting under arch/arm/plat-omap/dma.c
@@ -321,6 +323,15 @@ static int __init omap_init_irq(u32 base, struct device_node *node)
 
 	if (ret == 0)
 		omap_irq_enable_protection();
+
+	//??PATCH martin@familie-kaul.de set threshold level of all interrupts
+	//for (i = 0; i < omap_nr_irqs; i++) {
+		//intc_writel(INTC_ILR0 + 0x4 * i, 0x40);
+	//}
+	// intc_writel(INTC_ILR0 + (0x4 * 68), 0x40);
+	// intc_writel(INTC_ILR0 + (0x4 * 3), 0x40);
+	// intc_writel(INTC_ILR0 + (0x4 * 12), 0x40);
+	// intc_writel(INTC_ILR0 + (0x4 * 14), 0x40);
 
 	return ret;
 }

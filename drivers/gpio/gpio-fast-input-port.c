@@ -13,21 +13,44 @@
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/sched/signal.h>
+#include <linux/of_irq.h>
+#include <linux/spi/spi.h>
 
 #define IOCTL_SET_VARIABLES _IO('U', 0)
-#define IOCTL_ENABLE_SYSTIMER _IO('U', 1)
-#define IOCTL_ENABLE_IRQ _IO('U', 2)
-#define IOCTL_DISABLE_IRQ _IO('U', 3)
+#define IOCTL_ENABLE_FOREIGN_IRQ _IO('U', 1)
+#define IOCTL_DISABLE_FOREIGN_IRQ _IO('U', 2)
+#define IOCTL_SPI_LINK _IO('U', 3)
 
 #define SIGNAL_FIP 44
 
 #define START_ADDR 0x48200288
+#define INTC_INTC_ILR0_BASE_REG 0x48200100
+
+#define INCT_CONTROL_BASE 0x48200000
+#define INTC_THRESHOLD 0x0068
+
+extern struct class * class_find( const char * name );
 
 //==================================================================================================
 struct FipGpioData {
 	unsigned int gpio_id;
 	unsigned int irq_number;
-	void __iomem *mem;
+	void __iomem *intc_ilr0_reg_mem;
+	struct gpio_desc *gpio;
+	struct irq_data *irq;
+	struct irq_desc *irqd;
+	struct irq_desc *parent_irqd;
+	int gpio_bank_hwirq_number;
+};
+
+//--------------------------------------------------------------------------------------------------
+struct FipSpiData {
+	unsigned int irq_number;
+	struct irq_data *irq;
+	struct irq_desc *irqd;
+	void __iomem *intc_ilr0_reg_mem;
+	struct spi_device *spi_dev;
+	int spi_hwirq_number;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -51,11 +74,30 @@ struct FipIoctlInfo {
 	void *instance_ptr;
 };
 
+//--------------------------------------------------------------------------------------------------
+struct FipInterruptData {
+	void __iomem *intc_threshold_reg;
+};
+
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
 	.gpio_id = 44,
 	.irq_number = 0,
-	.mem = NULL,
+	.intc_ilr0_reg_mem = NULL,
+	.gpio = NULL,
+	.irq = NULL,
+	.irqd = NULL,
+	.parent_irqd = NULL,
+	.gpio_bank_hwirq_number = 0,
+};
+
+static struct FipSpiData fip_spi_data = {
+	.irq_number = 0,
+	.irq = NULL,
+	.irqd = NULL,
+	.intc_ilr0_reg_mem = NULL,
+	.spi_dev = NULL,
+	.spi_hwirq_number = 0,
 };
 
 static struct FipDeviceInfo fip_device_info = {
@@ -69,6 +111,10 @@ static struct FipUserSpaceApplicationInfo fip_us_app_info = {
 	.app_task = NULL,
 };
 
+static struct FipInterruptData fip_irq_data = {
+	.intc_threshold_reg = NULL,
+};
+
 // ToDo: check if this is neccessary
 extern ktime_t tick_period;
 
@@ -78,6 +124,10 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 static int fip_open(struct inode *inode, struct file *file);
 static int fip_release(struct inode *inode, struct file *file);
 static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+
+static void fip_enable_foreign_irq(void);
+static void fip_disable_foreign_irq(void);
+static void fip_initialize_spi_link(void);
 
 //==================================================================================================
 static struct file_operations fops = {
@@ -135,7 +185,7 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		memset(&fip_us_app_info.signal_info, 0,
 		       sizeof(struct kernel_siginfo));
 		fip_us_app_info.signal_info.si_signo = SIGNAL_FIP;
-		fip_us_app_info.signal_info.si_code = SI_QUEUE;
+		fip_us_app_info.signal_info.si_code = SI_KERNEL;
 
 		if (copy_from_user(&args, (struct FipIoctlInfo *)arg,
 				   sizeof(struct FipIoctlInfo))) {
@@ -150,6 +200,18 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				 PIDTYPE_PID);
 
 		fip_us_app_info.signal_info.si_int = (int)args.instance_ptr;
+		break;
+
+	case IOCTL_ENABLE_FOREIGN_IRQ:
+		fip_enable_foreign_irq();
+		break;
+
+	case IOCTL_DISABLE_FOREIGN_IRQ:
+		fip_disable_foreign_irq();
+		break;
+
+	case IOCTL_SPI_LINK:
+		fip_initialize_spi_link();
 		break;
 
 	default:
@@ -172,7 +234,8 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 {
 	if (fip_us_app_info.app_task != NULL) {
 		tick_period = 100000000; //set period to 100 ms
-		iowrite32(1U << 4, fip_gpio_data.mem);
+		writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
+		writel_relaxed(1U << 4, fip_spi_data.intc_ilr0_reg_mem);
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
@@ -180,11 +243,73 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		}
 
 		return (irq_handler_t)IRQ_HANDLED;
-		//return (irq_handler_t)IRQ_WAKE_THREAD;
 	}
 
 	return (irq_handler_t)IRQ_NONE;
 }
+
+/*******************************************************************************/ /*!
+ * @brief  Enables interrupt handling of other interrupts than the FIP irqs.
+ *
+ * @return
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void fip_enable_foreign_irq(void)
+{
+	writel_relaxed(0xFF, fip_irq_data.intc_threshold_reg);
+}
+
+/*******************************************************************************/ /*!
+ * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
+ *
+ * @return
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void fip_disable_foreign_irq(void)
+{
+	writel_relaxed(0x05, fip_irq_data.intc_threshold_reg);
+}
+
+/*******************************************************************************/ /*!
+ * @brief  Searches the given spi device and stores the link to the spi device.
+ *         This link is used to get the interrupt number of the spi device for
+ *         setting the priority of the SPI device interrupt.
+ *
+ * @return
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void fip_initialize_spi_link(void)
+{
+	struct device *dev;
+	struct class *spidev_class = class_find("spi_master");
+	int gpio_bank_ilr0_base_reg;
+
+	if (IS_ERR(spidev_class)) {
+		printk(KERN_INFO "fip_open: not found spidev class\n");
+		return;
+	}
+
+	dev = class_find_device_by_name(spidev_class, "spi0");
+	if (!dev) {
+		printk(KERN_INFO "fip_open: cannot find spidev dev\n");
+		return;
+	}
+
+	fip_spi_data.irq_number = of_irq_get(dev->of_node, 0);
+	fip_spi_data.spi_dev = to_spi_device(dev);
+	fip_spi_data.irq = irq_get_irq_data(fip_spi_data.irq_number);
+	fip_spi_data.irqd = irq_to_desc(fip_spi_data.irq_number);
+	fip_spi_data.spi_hwirq_number = fip_spi_data.irqd->irq_data.hwirq;
+	gpio_bank_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
+				  (fip_spi_data.spi_hwirq_number * 4);
+	fip_spi_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
+
+	// printk(KERN_INFO "fip_open: OK %d %d\n", fip_spi_data.irq_number, (int)fip_spi_data.spi_hwirq_number);
+}
+
 
 /*******************************************************************************/ /*!
  * @brief  Kernel module initialization function for the module fast_input_port.
@@ -195,12 +320,26 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
  ***********************************************************************************/
 static int __init fast_input_port_init(void)
 {
-	/* Set up the requested GPIO-ID */
+	int gpio_bank_ilr0_base_reg;
+
+	/* Setup the memory accesses of the AMS335x interrupt intc registers */
+	fip_irq_data.intc_threshold_reg =
+		ioremap(INCT_CONTROL_BASE + INTC_THRESHOLD, 4);
+
+	/* Setup the requested GPIO-ID */
 	gpio_request(fip_gpio_data.gpio_id, "sysfs");
 	gpio_direction_input(fip_gpio_data.gpio_id);
 	gpio_export(fip_gpio_data.gpio_id, false);
 
 	fip_gpio_data.irq_number = gpio_to_irq(fip_gpio_data.gpio_id);
+	fip_gpio_data.gpio = gpio_to_desc(fip_gpio_data.gpio_id);
+	fip_gpio_data.irq = irq_get_irq_data(fip_gpio_data.irq_number);
+	fip_gpio_data.irqd = irq_to_desc(fip_gpio_data.irq_number);
+	fip_gpio_data.parent_irqd = irq_to_desc(fip_gpio_data.irqd->parent_irq);
+	fip_gpio_data.gpio_bank_hwirq_number =
+		fip_gpio_data.parent_irqd->irq_data.hwirq;
+	gpio_bank_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
+				  (fip_gpio_data.gpio_bank_hwirq_number * 4);
 
 	/* Allocating Major number */
 	if ((alloc_chrdev_region(&fip_device_info.device, 0, 1,
@@ -235,10 +374,12 @@ static int __init fast_input_port_init(void)
 		goto r_device;
 	}
 
-	fip_gpio_data.mem = ioremap(START_ADDR, 4);
+	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
 	if ((request_threaded_irq(fip_gpio_data.irq_number, NULL,
 				  (irq_handler_t)fip_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_NO_THREAD | IRQF_NOBALANCING ,
+				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT |
+					  IRQF_NO_SUSPEND | IRQF_NO_THREAD |
+					  IRQF_NOBALANCING,
 				  "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
