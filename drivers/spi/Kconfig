@@ -501,6 +501,14 @@ config SPI_OMAP_100K
 	help
 	  OMAP SPI 100K master controller for omap7xx boards.
 
+config SPI_OMAP2_HW_DIRECT
+	tristate "HW direct driver for OMAP"
+	depends on ARCH_OMAP2PLUS || ARCH_K3 || COMPILE_TEST
+	select SG_SPLIT
+	help
+	  A spi driver that uses direct the OMAP2-MCSPI hardware without
+	  use of the queued spi driver class.
+
 config SPI_ORION
 	tristate "Orion SPI master"
 	depends on PLAT_ORION || ARCH_MVEBU || COMPILE_TEST
