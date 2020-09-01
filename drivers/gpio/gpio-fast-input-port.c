@@ -16,12 +16,10 @@
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/sched/signal.h>
-#include <linux/of_irq.h>
-#include <linux/spi/spi.h>
 
-#define IOCTL_SET_VARIABLES _IO('U', 0)
-#define IOCTL_ENABLE_FOREIGN_IRQ _IO('U', 1)
-#define IOCTL_DISABLE_FOREIGN_IRQ _IO('U', 2)
+#define IOCTL_FIP_SET_VARIABLES _IO('U', 0)
+#define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
+#define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
 
 #define SIGNAL_FIP 44
 
@@ -163,7 +161,7 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct FipIoctlInfo args;
 
 	switch (cmd) {
-	case IOCTL_SET_VARIABLES:
+	case IOCTL_FIP_SET_VARIABLES:
 		memset(&fip_us_app_info.signal_info, 0,
 		       sizeof(struct kernel_siginfo));
 		fip_us_app_info.signal_info.si_signo = SIGNAL_FIP;
@@ -184,11 +182,11 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		fip_us_app_info.signal_info.si_int = (int)args.instance_ptr;
 		break;
 
-	case IOCTL_ENABLE_FOREIGN_IRQ:
+	case IOCTL_FIP_ENABLE_FOREIGN_IRQ:
 		fip_enable_foreign_irq();
 		break;
 
-	case IOCTL_DISABLE_FOREIGN_IRQ:
+	case IOCTL_FIP_DISABLE_FOREIGN_IRQ:
 		fip_disable_foreign_irq();
 		break;
 
