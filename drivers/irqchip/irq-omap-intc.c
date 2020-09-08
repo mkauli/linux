@@ -325,9 +325,9 @@ static int __init omap_init_irq(u32 base, struct device_node *node)
 		omap_irq_enable_protection();
 
 	//??PATCH martin@familie-kaul.de set threshold level of all interrupts
-	//for (i = 0; i < omap_nr_irqs; i++) {
-		//intc_writel(INTC_ILR0 + 0x4 * i, 0x40);
-	//}
+	for (i = 0; i < omap_nr_irqs; i++) {
+		intc_writel(INTC_ILR0 + 0x4 * i, 0x40);
+	}
 	// intc_writel(INTC_ILR0 + (0x4 * 68), 0x40);
 	// intc_writel(INTC_ILR0 + (0x4 * 3), 0x40);
 	// intc_writel(INTC_ILR0 + (0x4 * 12), 0x40);
