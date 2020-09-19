@@ -6,13 +6,22 @@
  * Written by Martin Kaul <martin@familie-kaul.de>
  */
 
+// #define ENABLE_DEBUGGING 1
+#if defined(ENABLE_DEBUGGING)
+#	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
+#	define USE_INLINED_FUNCTION
+#else
+#	define USE_NON_OPTIMIZED_FUNCTION
+#	define USE_INLINED_FUNCTION inline
+#endif
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
-#include <asm-generic/io.h>
 #include <linux/slab.h>
+#include <linux/io.h>
 
 static unsigned bufsiz = 4096;
 module_param(bufsiz, uint, S_IRUGO);
@@ -483,38 +492,38 @@ static struct Omap2HwDirectPinMuxData omap2_hw_direct_pinmux_data = {
 };
 
 //==================================================================================================
-static int omap2_hw_direct_open(struct inode *inode, struct file *file);
-static int omap2_hw_direct_release(struct inode *inode, struct file *file);
+static int omap2_hw_direct_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static int omap2_hw_direct_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
 static long omap2_hw_direct_ioctl(struct file *file, unsigned int cmd,
-				  unsigned long arg);
+				  unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
 static void prcm_enable_module(void __iomem *base_addr, uint32_t clk_ctrl_reg,
-			       uint32_t clk_st_ctrl_reg, uint32_t clk_act_mask);
+			       uint32_t clk_st_ctrl_reg, uint32_t clk_act_mask) USE_NON_OPTIMIZED_FUNCTION;
 static void prcm_disable_module(void __iomem *base_addr, uint32_t clk_ctrl_reg,
 				uint32_t clk_st_ctrl_reg,
-				uint32_t clk_act_mask);
-static void pinmux_initialize(void *param);
-static void spi_reset(void);
+				uint32_t clk_act_mask) USE_NON_OPTIMIZED_FUNCTION;
+static void pinmux_initialize(void *param) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_reset(void) USE_NON_OPTIMIZED_FUNCTION;
 void spi_clk_config(uint32_t chNum, uint32_t spiInClk, uint32_t spiOutClk,
-		    uint32_t clkMode);
+		    uint32_t clkMode) USE_NON_OPTIMIZED_FUNCTION;
 static int32_t spi_mode_config(uint32_t chNum, uint32_t spiMode,
 			       uint32_t chMode, uint32_t trMode,
-			       uint32_t pinMode);
-static int32_t spi_word_length(uint32_t chNum, uint32_t wordLength);
-static void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit);
-static void spi_ch_enable(uint32_t chNum, uint32_t enableCh);
-static void spi_wakeup_enable(uint32_t enableWu);
-static int spi_get_mode(uint32_t chNum);
-static void spi_set_mode(uint32_t chNum, int mode);
-static int spi_get_bits_per_word(uint32_t chNum);
-static void spi_set_bits_per_word(uint32_t chNum, int wordLength);
+			       uint32_t pinMode) USE_NON_OPTIMIZED_FUNCTION;
+static int32_t spi_word_length(uint32_t chNum, uint32_t wordLength) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_ch_enable(uint32_t chNum, uint32_t enableCh) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_wakeup_enable(uint32_t enableWu) USE_NON_OPTIMIZED_FUNCTION;
+static int spi_get_mode(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_set_mode(uint32_t chNum, int mode) USE_NON_OPTIMIZED_FUNCTION;
+static int spi_get_bits_per_word(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
+static void spi_set_bits_per_word(uint32_t chNum, int wordLength) USE_NON_OPTIMIZED_FUNCTION;
 static void spi_set_speed(uint32_t chNum, uint32_t spiInClk,
-			  uint32_t spiOutClk);
+			  uint32_t spiOutClk) USE_NON_OPTIMIZED_FUNCTION;
 static void spi_set_cs(uint32_t chNum, bool enable);
 static struct spi_ioc_transfer *
 spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
-		       unsigned *n_ioc);
+		       unsigned *n_ioc) USE_NON_OPTIMIZED_FUNCTION;
 static int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
-			  unsigned n_xfers);
+			  unsigned n_xfers) USE_NON_OPTIMIZED_FUNCTION;
 
 //==================================================================================================
 static struct file_operations fops = {
@@ -526,7 +535,7 @@ static struct file_operations fops = {
 
 //==================================================================================================
 
-static inline uint32_t omap2_hw_direct_rd_reg32(void __iomem *reg_addr)
+static USE_INLINED_FUNCTION uint32_t omap2_hw_direct_rd_reg32(void __iomem *reg_addr)
 {
 	uint32_t val = ioread32(reg_addr);
 	// printk(KERN_INFO "AAA rd: base=%x v=%x \n", (int)reg_addr, val);
@@ -534,7 +543,7 @@ static inline uint32_t omap2_hw_direct_rd_reg32(void __iomem *reg_addr)
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline void omap2_hw_direct_wr_reg32(void __iomem *reg_addr,
+static USE_INLINED_FUNCTION void omap2_hw_direct_wr_reg32(void __iomem *reg_addr,
 					    uint32_t value)
 {
 	// printk(KERN_INFO "AAA wd: base=%x v=%x \n", (int)reg_addr, value);
@@ -542,33 +551,33 @@ static inline void omap2_hw_direct_wr_reg32(void __iomem *reg_addr,
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline uint16_t omap2_hw_direct_rd_reg16(void __iomem *reg_addr)
+static USE_INLINED_FUNCTION uint16_t omap2_hw_direct_rd_reg16(void __iomem *reg_addr)
 {
 	return ioread16(reg_addr);
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline void omap2_hw_direct_wr_reg16(void __iomem *reg_addr,
+static USE_INLINED_FUNCTION void omap2_hw_direct_wr_reg16(void __iomem *reg_addr,
 					    uint16_t value)
 {
 	iowrite16(value, reg_addr);
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline uint8_t omap2_hw_direct_rd_reg8(void __iomem *reg_addr)
+static USE_INLINED_FUNCTION uint8_t omap2_hw_direct_rd_reg8(void __iomem *reg_addr)
 {
 	return ioread8(reg_addr);
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline void omap2_hw_direct_wr_reg8(void __iomem *reg_addr,
+static USE_INLINED_FUNCTION void omap2_hw_direct_wr_reg8(void __iomem *reg_addr,
 					   uint8_t value)
 {
 	iowrite8(value, reg_addr);
 }
 
 //--------------------------------------------------------------------------------------------------
-static inline void omap2_hw_direct_wr_field32_raw(void __iomem *reg_addr,
+static USE_INLINED_FUNCTION void omap2_hw_direct_wr_field32_raw(void __iomem *reg_addr,
 						  uint32_t mask, uint32_t shift,
 						  uint32_t value)
 {
@@ -1234,11 +1243,22 @@ spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
 	return memdup_user(u_ioc, tmp);
 }
 
-static inline void spi_wait_for_tx_free(uint32_t chNum)
+static USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
+static USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
+
+USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum)
 {
 	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
 	while ((omap2_hw_direct_rd_reg32(baseAddr + MCSPI_CHSTAT(chNum)) &
 		MCSPI_CHSTAT_TXS_MASK) == 0)
+		;
+}
+
+USE_INLINED_FUNCTION void spi_wait_for_rx_full(uint32_t chNum)
+{
+	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
+	while ((omap2_hw_direct_rd_reg32(baseAddr + MCSPI_CHSTAT(chNum)) &
+		MCSPI_CHSTAT_RXS_MASK) == 0)
 		;
 }
 
@@ -1294,8 +1314,8 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 			}
 			omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
 						 c);
- 			spi_wait_for_tx_free(chNum);
 
+ 			spi_wait_for_rx_full(chNum);
  			*rx_buf++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
 
 			tmp_len--;
