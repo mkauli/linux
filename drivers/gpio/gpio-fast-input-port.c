@@ -8,6 +8,14 @@
  * Copyright (C) 2020 Martin Kaul <private>
  * Reformat & enhanced by Martin Kaul <martin@familie-kaul.de>
  */
+// #define ENABLE_DEBUGGING 1
+#if defined(ENABLE_DEBUGGING)
+#	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
+#	define USE_INLINED_FUNCTION
+#else
+#	define USE_NON_OPTIMIZED_FUNCTION
+#	define USE_INLINED_FUNCTION inline
+#endif
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -101,13 +109,13 @@ extern ktime_t tick_period;
 
 //==================================================================================================
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
-				     struct pt_regs *regs);
-static int fip_open(struct inode *inode, struct file *file);
-static int fip_release(struct inode *inode, struct file *file);
-static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+				     struct pt_regs *regs) USE_NON_OPTIMIZED_FUNCTION;
+static int fip_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static int fip_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
 
-static void fip_enable_foreign_irq(void);
-static void fip_disable_foreign_irq(void);
+static void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
+static void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 
 //==================================================================================================
 static struct file_operations fops = {
