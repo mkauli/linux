@@ -208,9 +208,10 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
+	writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
+
 	if (fip_us_app_info.app_task != NULL) {
 		tick_period = 100000000; //set period to 100 ms
-		writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
