@@ -17,6 +17,8 @@
 #	define USE_INLINED_FUNCTION inline
 #endif
 
+#define MONITOR_TIME_DIFFERENCE 1
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/gpio.h>
@@ -77,6 +79,17 @@ struct FipInterruptData {
 	void __iomem *intc_threshold_reg;
 };
 
+//--------------------------------------------------------------------------------------------------
+#if defined(MONITOR_TIME_DIFFERENCE)
+struct FipSystemTimerData {
+	void __iomem * system_timer_reg;
+	unsigned int init_counter;
+	unsigned int max_time_value;
+	unsigned int min_time_value;
+	unsigned int last_time_value;
+};
+#endif
+
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
 	.gpio_id = 44,
@@ -103,6 +116,16 @@ static struct FipUserSpaceApplicationInfo fip_us_app_info = {
 static struct FipInterruptData fip_irq_data = {
 	.intc_threshold_reg = NULL,
 };
+
+#if defined(MONITOR_TIME_DIFFERENCE)
+static struct FipSystemTimerData fip_system_timer_data = {
+	.system_timer_reg = NULL,
+	.init_counter = 20,
+	.max_time_value = 0,
+	.min_time_value = 0xFFFFFFFF,
+	.last_time_value = 0,
+};
+#endif
 
 // ToDo: check if this is neccessary
 extern ktime_t tick_period;
@@ -152,6 +175,10 @@ static int fip_release(struct inode *inode, struct file *file)
 	fip_us_app_info.pid = 0;
 	fip_us_app_info.instance_ptr = NULL;
 	tick_period = 1000000; //reset period to 1 ms
+
+#if defined(MONITOR_TIME_DIFFERENCE)
+	fip_system_timer_data.init_counter = 20;
+#endif
 
 	return 0;
 }
@@ -216,9 +243,39 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
+#if defined(MONITOR_TIME_DIFFERENCE)
+	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
+	unsigned int time_difference;
+#endif
+
 	writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
 
 	if (fip_us_app_info.app_task != NULL) {
+
+#if defined(MONITOR_TIME_DIFFERENCE)
+		if(fip_system_timer_data.init_counter > 0) {
+			fip_system_timer_data.last_time_value = time_value;
+			fip_system_timer_data.init_counter--;
+			fip_system_timer_data.max_time_value = 0;
+			fip_system_timer_data.min_time_value = 0xFFFFFFFF;
+		}
+		else {
+			time_difference = (time_value - fip_system_timer_data.last_time_value);
+			if(time_difference > fip_system_timer_data.max_time_value) {
+				fip_system_timer_data.max_time_value = time_difference;
+			}
+			if(time_difference < fip_system_timer_data.min_time_value) {
+				fip_system_timer_data.min_time_value = time_difference;
+			}
+			fip_system_timer_data.last_time_value = time_value;
+		}
+
+		if(fip_system_timer_data.max_time_value > (9600000+8400)) {
+			static int counter = 0;
+			counter++;
+		}
+#endif
+
 		tick_period = 100000000; //set period to 100 ms
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
@@ -329,6 +386,12 @@ static int __init fast_input_port_init(void)
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
+
+#if defined(MONITOR_TIME_DIFFERENCE)
+	/* system timer settings. */
+	fip_system_timer_data.system_timer_reg = ioremap(0x44E31028, 4);
+#endif
+
 	return 0;
 
 irq:
