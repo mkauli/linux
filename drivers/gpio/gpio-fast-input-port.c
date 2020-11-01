@@ -77,6 +77,7 @@ struct FipIoctlInfo {
 //--------------------------------------------------------------------------------------------------
 struct FipInterruptData {
 	void __iomem *intc_threshold_reg;
+	bool interrupt_enabled;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -115,6 +116,7 @@ static struct FipUserSpaceApplicationInfo fip_us_app_info = {
 
 static struct FipInterruptData fip_irq_data = {
 	.intc_threshold_reg = NULL,
+	.interrupt_enabled = true,
 };
 
 #if defined(MONITOR_TIME_DIFFERENCE)
@@ -219,10 +221,12 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case IOCTL_FIP_ENABLE_FOREIGN_IRQ:
 		fip_enable_foreign_irq();
+		fip_irq_data.interrupt_enabled = true;
 		break;
 
 	case IOCTL_FIP_DISABLE_FOREIGN_IRQ:
 		fip_disable_foreign_irq();
+		fip_irq_data.interrupt_enabled = false;
 		break;
 
 	default:
@@ -253,26 +257,28 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 	if (fip_us_app_info.app_task != NULL) {
 
 #if defined(MONITOR_TIME_DIFFERENCE)
-		if(fip_system_timer_data.init_counter > 0) {
-			fip_system_timer_data.last_time_value = time_value;
-			fip_system_timer_data.init_counter--;
-			fip_system_timer_data.max_time_value = 0;
-			fip_system_timer_data.min_time_value = 0xFFFFFFFF;
-		}
-		else {
-			time_difference = (time_value - fip_system_timer_data.last_time_value);
-			if(time_difference > fip_system_timer_data.max_time_value) {
-				fip_system_timer_data.max_time_value = time_difference;
+		if(!fip_irq_data.interrupt_enabled) {
+			if(fip_system_timer_data.init_counter > 0) {
+				fip_system_timer_data.last_time_value = time_value;
+				fip_system_timer_data.init_counter--;
+				fip_system_timer_data.max_time_value = 0;
+				fip_system_timer_data.min_time_value = 0xFFFFFFFF;
 			}
-			if(time_difference < fip_system_timer_data.min_time_value) {
-				fip_system_timer_data.min_time_value = time_difference;
+			else {
+				time_difference = (time_value - fip_system_timer_data.last_time_value);
+				if(time_difference > fip_system_timer_data.max_time_value) {
+					fip_system_timer_data.max_time_value = time_difference;
+				}
+				if(time_difference < fip_system_timer_data.min_time_value) {
+					fip_system_timer_data.min_time_value = time_difference;
+				}
+				fip_system_timer_data.last_time_value = time_value;
 			}
-			fip_system_timer_data.last_time_value = time_value;
-		}
 
-		if(fip_system_timer_data.max_time_value > (9600000+8400)) {
-			static int counter = 0;
-			counter++;
+			if(fip_system_timer_data.max_time_value > (9600000+8400)) {
+				static int counter = 0;
+				counter++;
+			}
 		}
 #endif
 
