@@ -6,7 +6,7 @@
  * Written by Martin Kaul <martin@familie-kaul.de>
  */
 
-// #define ENABLE_DEBUGGING 1
+//#define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
 #	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
 #	define USE_INLINED_FUNCTION
@@ -440,6 +440,10 @@ static struct pinmuxPerCfg gMcspi0PinCfg[] = {
 	  PIN_SPI0_D1, 0,
 	  (PIN_MODE(0) |
 	   ((PIN_PULL_TYPE_SEL) & (~PIN_PULL_UD_EN & ~PIN_RX_ACTIVE))) },
+	{ /* MySPI1 -> spi0_cs0 -> A16 */
+	  PIN_SPI0_CS0, 0,
+	  (PIN_MODE(0) |
+	   ((PIN_PULL_TYPE_SEL | PIN_RX_ACTIVE) & (~PIN_PULL_UD_EN))) },
 	{ PINMUX_INVALID_PIN }
 };
 
@@ -618,6 +622,9 @@ static int omap2_hw_direct_open(struct inode *inode, struct file *file)
 
 	omap2_hw_direct_rd_reg32(omap2_hw_direct_spi_data.base +
 				 MCSPI_CHCONF(0));
+
+	spi_set_cs(MCSPI_CH_NUM_0, FALSE); 
+ 	spi_ch_enable(MCSPI_CH_NUM_0, FALSE);
 
 	// printk(KERN_INFO "omap2_hw_direct_open\n");
 
@@ -1204,7 +1211,7 @@ void spi_set_cs(uint32_t chNum, bool enable)
 	uint32_t reg_value =
 		omap2_hw_direct_rd_reg32(baseAddr + MCSPI_CHCONF(chNum));
 
-	if (enable) {
+	if (!enable) {
 		reg_value &= ~MCSPI_CHCONF_FORCE_MASK;
 	} else {
 		reg_value |= MCSPI_CHCONF_FORCE_MASK;
@@ -1244,7 +1251,7 @@ spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
 }
 
 static USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
-static USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
+static USE_INLINED_FUNCTION void spi_wait_for_rx_full(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
 
 USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum)
 {
@@ -1279,8 +1286,10 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 	uint8_t *tx_buf, *rx_buf;
 	uint8_t c;
 	uint32_t tmp_len;
+	bool keep_cs = false;
 
- 	spi_ch_enable(MCSPI_CH_NUM_0, TRUE);
+	spi_set_cs(chNum, TRUE); // ??ToDo  disables output??
+ 	spi_ch_enable(chNum, TRUE);
 
 	total = 0;
 	tx_buf = omap2_hw_direct_spi_data.tx_buffer;
@@ -1292,7 +1301,6 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 		}
 
  		spi_set_speed(chNum, MCSPI_IN_CLK, u_tmp->speed_hz);
- 		// spi_set_cs(chNum, TRUE); ??ToDo  disables output??
 
 		/* Copy user tx data  */
 		if (u_tmp->tx_buf) {
@@ -1332,15 +1340,19 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 			}
 		}
 
-		if (u_tmp->cs_change == 0) {
-			spi_set_cs(chNum, FALSE);
+		if (u_tmp->cs_change == 1) {
+			keep_cs = true;
 		}
+	}
+
+	if(!keep_cs) {
+		spi_set_cs(chNum, FALSE);
 	}
 
 	status = total;
 
 done:
- 	spi_ch_enable(MCSPI_CH_NUM_0, FALSE);
+ 	spi_ch_enable(chNum, FALSE);
 	return status;
 }
 
