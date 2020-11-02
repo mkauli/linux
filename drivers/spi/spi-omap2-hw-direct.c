@@ -1283,8 +1283,8 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 	struct spi_ioc_transfer *u_tmp;
 	int status = -EFAULT;
 	unsigned n, total;
-	uint8_t *tx_buf, *rx_buf;
-	uint8_t c;
+	void *tx_buf, *rx_buf;
+	uint16_t c;
 	uint32_t tmp_len;
 	bool keep_cs = false;
 
@@ -1306,33 +1306,61 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 		if (u_tmp->tx_buf) {
 			if (copy_from_user(
 				    tx_buf,
-				    (const u8 __user *)(uintptr_t)u_tmp->tx_buf,
+				    (const void __user *)(uintptr_t)u_tmp->tx_buf,
 				    u_tmp->len)) {
 				goto done;
 			}
 		}
 
-		tmp_len = u_tmp->len;
-		while (tmp_len > 0) {
- 			spi_wait_for_tx_free(chNum);
-			if (u_tmp->tx_buf) {
-				c = *tx_buf++;
-			} else {
-				c = 0; // dummy data
+		spi_set_bits_per_word(chNum, u_tmp->bits_per_word);
+
+		if(u_tmp->bits_per_word <= 8) {
+			uint8_t *tx_buf_u8 = tx_buf;
+			uint8_t *rx_buf_u8 = rx_buf;
+			tmp_len = u_tmp->len;
+			while (tmp_len > 0) {
+				spi_wait_for_tx_free(chNum);
+				if (u_tmp->tx_buf) {
+					c = *tx_buf_u8++;
+				} else {
+					c = 0; // dummy data
+				}
+				omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
+							c);
+
+				spi_wait_for_rx_full(chNum);
+				*rx_buf_u8++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+
+				tmp_len--;
+				total++;
 			}
-			omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
-						 c);
+		}
+		else if(u_tmp->bits_per_word <= 16) {
+			uint16_t *tx_buf_u16 = tx_buf;
+			uint16_t *rx_buf_u16 = rx_buf;
+			tmp_len = u_tmp->len / 2;
+			while (tmp_len > 0) {
+				spi_wait_for_tx_free(chNum);
+				if (u_tmp->tx_buf) {
+					c = *tx_buf_u16++;
+				} else {
+					c = 0; // dummy data
+				}
+				omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
+							c);
 
- 			spi_wait_for_rx_full(chNum);
- 			*rx_buf++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+				spi_wait_for_rx_full(chNum);
+				*rx_buf_u16++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
 
-			tmp_len--;
-			total++;
+				tmp_len--;
+				total++;
+			}
+			total *= 2;
 		}
 
 		/* Copy received data to user space */
 		if (u_tmp->rx_buf) {
-			if (copy_to_user((u8 __user *)
+			if (copy_to_user((void __user *)
 					(uintptr_t) u_tmp->rx_buf, omap2_hw_direct_spi_data.rx_buffer,
 					u_tmp->len)) {
 				status = -EFAULT;
