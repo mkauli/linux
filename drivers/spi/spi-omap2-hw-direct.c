@@ -1317,6 +1317,7 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 		if(u_tmp->bits_per_word <= 8) {
 			uint8_t *tx_buf_u8 = tx_buf;
 			uint8_t *rx_buf_u8 = rx_buf;
+			uint8_t rx_value;
 			tmp_len = u_tmp->len;
 			while (tmp_len > 0) {
 				spi_wait_for_tx_free(chNum);
@@ -1329,7 +1330,8 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 							c);
 
 				spi_wait_for_rx_full(chNum);
-				*rx_buf_u8++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+				rx_value = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+				*rx_buf_u8++ = rx_value;
 
 				tmp_len--;
 				total++;
@@ -1338,6 +1340,7 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 		else if(u_tmp->bits_per_word <= 16) {
 			uint16_t *tx_buf_u16 = tx_buf;
 			uint16_t *rx_buf_u16 = rx_buf;
+			uint16_t rx_value;
 			tmp_len = u_tmp->len / 2;
 			while (tmp_len > 0) {
 				spi_wait_for_tx_free(chNum);
@@ -1350,7 +1353,8 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 							c);
 
 				spi_wait_for_rx_full(chNum);
-				*rx_buf_u16++ = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+				rx_value = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
+				*rx_buf_u16++ = rx_value;
 
 				tmp_len--;
 				total++;
