@@ -513,7 +513,7 @@ static int32_t spi_mode_config(uint32_t chNum, uint32_t spiMode,
 			       uint32_t chMode, uint32_t trMode,
 			       uint32_t pinMode) USE_NON_OPTIMIZED_FUNCTION;
 static int32_t spi_word_length(uint32_t chNum, uint32_t wordLength) USE_NON_OPTIMIZED_FUNCTION;
-static void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit) USE_NON_OPTIMIZED_FUNCTION;
+// static void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit) USE_NON_OPTIMIZED_FUNCTION;
 static void spi_ch_enable(uint32_t chNum, uint32_t enableCh) USE_NON_OPTIMIZED_FUNCTION;
 static void spi_wakeup_enable(uint32_t enableWu) USE_NON_OPTIMIZED_FUNCTION;
 static int spi_get_mode(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
@@ -1026,19 +1026,19 @@ int32_t spi_word_length(uint32_t chNum, uint32_t wordLength)
  * @exception
  * @globals
  ***********************************************************************************/
-void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit)
-{
-	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
-	if (TRUE == enableStartBit) {
-		/* Enable the start bit. */
-		HW_WR_FIELD32((baseAddr + MCSPI_CHCONF(chNum)),
-			      MCSPI_CHCONF_SBE, MCSPI_CHCONF_SBE_ENABLED);
-	} else {
-		/* Disable the start bit. */
-		HW_WR_FIELD32((baseAddr + MCSPI_CHCONF(chNum)),
-			      MCSPI_CHCONF_SBE, MCSPI_CHCONF_SBE_DISABLED);
-	}
-}
+// void spi_start_bit_enable(uint32_t chNum, uint32_t enableStartBit)
+// {
+// 	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
+// 	if (TRUE == enableStartBit) {
+// 		/* Enable the start bit. */
+// 		HW_WR_FIELD32((baseAddr + MCSPI_CHCONF(chNum)),
+// 			      MCSPI_CHCONF_SBE, MCSPI_CHCONF_SBE_ENABLED);
+// 	} else {
+// 		/* Disable the start bit. */
+// 		HW_WR_FIELD32((baseAddr + MCSPI_CHCONF(chNum)),
+// 			      MCSPI_CHCONF_SBE, MCSPI_CHCONF_SBE_DISABLED);
+// 	}
+// }
 
 /*******************************************************************************/ /*!
  * @brief  SPI channel enable/disable.
@@ -1249,9 +1249,6 @@ spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
 	/* copy into scratch area */
 	return memdup_user(u_ioc, tmp);
 }
-
-static USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
-static USE_INLINED_FUNCTION void spi_wait_for_rx_full(uint32_t chNum) USE_NON_OPTIMIZED_FUNCTION;
 
 USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum)
 {
