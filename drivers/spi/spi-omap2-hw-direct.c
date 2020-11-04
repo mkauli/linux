@@ -452,6 +452,7 @@ struct Omap2HwDirectDeviceInfo {
 	dev_t device;
 	struct cdev driver_cdev;
 	struct class *dev_class;
+	bool initialize_spi;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -477,6 +478,7 @@ struct Omap2HwDirectPinMuxData {
 static struct Omap2HwDirectDeviceInfo omap2_hw_direct_device_info = {
 	.device = 0,
 	.dev_class = NULL,
+	.initialize_spi = true,
 };
 
 static struct Omap2HwDirectSpiData omap2_hw_direct_spi_data = {
@@ -606,25 +608,29 @@ static USE_INLINED_FUNCTION void omap2_hw_direct_wr_field32_raw(void __iomem *re
  ***********************************************************************************/
 static int omap2_hw_direct_open(struct inode *inode, struct file *file)
 {
-	prcm_enable_module(omap2_hw_direct_prcm_data.base, CM_PER_SPI0_CLKCTRL,
-			   CM_PER_L3_CLKSTCTRL,
-			   CM_PER_L3_CLKSTCTRL_CLKACTIVITY_L3_GCLK);
-	pinmux_initialize(NULL);
-	spi_reset();
-	spi_wakeup_enable(TRUE);
-	spi_clk_config(MCSPI_CH_NUM, MCSPI_IN_CLK, MCSPI_OUT_FREQ,
-		       MCSPI_CLK_MODE_2);
-	spi_mode_config(MCSPI_CH_NUM_0, MCSPI_MODE_MASTER,
-			MCSPI_MODULCTRL_SINGLE_MODSINGLE,
-			MCSPI_CHCONF_TRM_TRANSRECEI,
-			MCSPI_DATA_LINE_COMM_MODE_1);
-	spi_word_length(MCSPI_CH_NUM_0, 8);
+	if(omap2_hw_direct_device_info.initialize_spi) {
+		omap2_hw_direct_device_info.initialize_spi = false;
 
-	omap2_hw_direct_rd_reg32(omap2_hw_direct_spi_data.base +
-				 MCSPI_CHCONF(0));
+		prcm_enable_module(omap2_hw_direct_prcm_data.base, CM_PER_SPI0_CLKCTRL,
+				CM_PER_L3_CLKSTCTRL,
+				CM_PER_L3_CLKSTCTRL_CLKACTIVITY_L3_GCLK);
+		pinmux_initialize(NULL);
+		spi_reset();
+		spi_wakeup_enable(TRUE);
+		spi_clk_config(MCSPI_CH_NUM, MCSPI_IN_CLK, MCSPI_OUT_FREQ,
+				MCSPI_CLK_MODE_2);
+		spi_mode_config(MCSPI_CH_NUM_0, MCSPI_MODE_MASTER,
+				MCSPI_MODULCTRL_SINGLE_MODSINGLE,
+				MCSPI_CHCONF_TRM_TRANSRECEI,
+				MCSPI_DATA_LINE_COMM_MODE_1);
+		spi_word_length(MCSPI_CH_NUM_0, 8);
 
-	spi_set_cs(MCSPI_CH_NUM_0, FALSE); 
- 	spi_ch_enable(MCSPI_CH_NUM_0, FALSE);
+		omap2_hw_direct_rd_reg32(omap2_hw_direct_spi_data.base +
+					MCSPI_CHCONF(0));
+
+		spi_set_cs(MCSPI_CH_NUM_0, FALSE); 
+		spi_ch_enable(MCSPI_CH_NUM_0, FALSE);
+	}
 
 	// printk(KERN_INFO "omap2_hw_direct_open\n");
 
@@ -640,10 +646,10 @@ static int omap2_hw_direct_open(struct inode *inode, struct file *file)
  ***********************************************************************************/
 static int omap2_hw_direct_release(struct inode *inode, struct file *file)
 {
-	spi_wakeup_enable(FALSE);
-	prcm_disable_module(omap2_hw_direct_prcm_data.base, CM_PER_SPI0_CLKCTRL,
-			    CM_PER_L3_CLKSTCTRL,
-			    CM_PER_L3_CLKSTCTRL_CLKACTIVITY_L3_GCLK);
+	// spi_wakeup_enable(FALSE);
+	// prcm_disable_module(omap2_hw_direct_prcm_data.base, CM_PER_SPI0_CLKCTRL,
+	// 		    CM_PER_L3_CLKSTCTRL,
+	// 		    CM_PER_L3_CLKSTCTRL_CLKACTIVITY_L3_GCLK);
 
 	// printk(KERN_INFO "omap2_hw_direct_release\n");
 	return 0;
