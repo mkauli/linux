@@ -1252,18 +1252,14 @@ spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
 
 USE_INLINED_FUNCTION void spi_wait_for_tx_free(uint32_t chNum)
 {
-	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
-	while ((omap2_hw_direct_rd_reg32(baseAddr + MCSPI_CHSTAT(chNum)) &
-		MCSPI_CHSTAT_TXS_MASK) == 0)
-		;
+	void __iomem *baseAddr = omap2_hw_direct_spi_data.base + MCSPI_CHSTAT(chNum);
+	while ((omap2_hw_direct_rd_reg32(baseAddr) & MCSPI_CHSTAT_TXS_MASK) == 0);
 }
 
 USE_INLINED_FUNCTION void spi_wait_for_rx_full(uint32_t chNum)
 {
-	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
-	while ((omap2_hw_direct_rd_reg32(baseAddr + MCSPI_CHSTAT(chNum)) &
-		MCSPI_CHSTAT_RXS_MASK) == 0)
-		;
+	void __iomem *baseAddr = omap2_hw_direct_spi_data.base + MCSPI_CHSTAT(chNum);
+	while ((omap2_hw_direct_rd_reg32(baseAddr) & MCSPI_CHSTAT_RXS_MASK) == 0);
 }
 
 /*******************************************************************************/ /*!
@@ -1277,13 +1273,16 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 		   unsigned n_xfers)
 {
 	void __iomem *baseAddr = omap2_hw_direct_spi_data.base;
+	register void __iomem *txRegAddr = baseAddr + OMAP2_HWDIRECT_TX0;
+	register void __iomem *rxRegAddr = baseAddr + OMAP2_HWDIRECT_RX0;
 	struct spi_ioc_transfer *u_tmp;
 	int status = -EFAULT;
 	unsigned n, total;
 	void *tx_buf, *rx_buf;
 	uint16_t c;
-	uint32_t tmp_len;
+	register uint32_t tmp_len;
 	bool keep_cs = false;
+	register bool tx_available = true;
 
 	spi_set_cs(chNum, TRUE); // ??ToDo  disables output??
  	spi_ch_enable(chNum, TRUE);
@@ -1311,52 +1310,45 @@ int spidev_message(uint32_t chNum, struct spi_ioc_transfer *u_xfers,
 
 		spi_set_bits_per_word(chNum, u_tmp->bits_per_word);
 
+		if (u_tmp->tx_buf) {
+			tx_available = true;
+		}
+		else {
+			tx_available = false;
+		}
+
+
 		if(u_tmp->bits_per_word <= 8) {
-			uint8_t *tx_buf_u8 = tx_buf;
-			uint8_t *rx_buf_u8 = rx_buf;
-			uint8_t rx_value;
+			register uint8_t *tx_buf_u8 = tx_buf;
+			register uint8_t *rx_buf_u8 = rx_buf;
 			tmp_len = u_tmp->len;
 			while (tmp_len > 0) {
 				spi_wait_for_tx_free(chNum);
-				if (u_tmp->tx_buf) {
-					c = *tx_buf_u8++;
-				} else {
-					c = 0; // dummy data
-				}
-				omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
-							c);
+				c = tx_available ? *tx_buf_u8++ : 0;
+				omap2_hw_direct_wr_reg32(txRegAddr, c);
 
 				spi_wait_for_rx_full(chNum);
-				rx_value = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
-				*rx_buf_u8++ = rx_value;
+				*rx_buf_u8++ = omap2_hw_direct_rd_reg32(rxRegAddr);
 
 				tmp_len--;
-				total++;
 			}
+			total += u_tmp->len;
 		}
 		else if(u_tmp->bits_per_word <= 16) {
-			uint16_t *tx_buf_u16 = tx_buf;
-			uint16_t *rx_buf_u16 = rx_buf;
-			uint16_t rx_value;
+			register uint16_t *tx_buf_u16 = tx_buf;
+			register uint16_t *rx_buf_u16 = rx_buf;
 			tmp_len = u_tmp->len / 2;
 			while (tmp_len > 0) {
 				spi_wait_for_tx_free(chNum);
-				if (u_tmp->tx_buf) {
-					c = *tx_buf_u16++;
-				} else {
-					c = 0; // dummy data
-				}
-				omap2_hw_direct_wr_reg32(baseAddr + OMAP2_HWDIRECT_TX0,
-							c);
+				c = tx_available ? *tx_buf_u16++ : 0;
+				omap2_hw_direct_wr_reg32(txRegAddr, c);
 
 				spi_wait_for_rx_full(chNum);
-				rx_value = omap2_hw_direct_rd_reg32(baseAddr + OMAP2_HWDIRECT_RX0);
-				*rx_buf_u16++ = rx_value;
+				*rx_buf_u16++ = omap2_hw_direct_rd_reg32(rxRegAddr);
 
 				tmp_len--;
-				total++;
 			}
-			total *= 2;
+			total += u_tmp->len;
 		}
 
 		/* Copy received data to user space */
