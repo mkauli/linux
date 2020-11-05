@@ -353,6 +353,15 @@
 //     };
 // };
 
+&timer4 {
+	compatible = "ti,am335x-timer";
+	pinctrl-names = "default";
+	status = "okay";
+	clock-names = "fck";
+	ti,timer-alwon;
+	clocks = <&timer4_fck>;
+};
+
 /include/ "tps65217.dtsi"
 
 &tps {

@@ -233,6 +233,12 @@ config OMAP3_SDRC_AC_TIMING
 	  wish to say no.  Selecting yes without understanding what is
 	  going on could result in system crashes;
 
+config AM335X_HARDWARE_TIMER
+	bool "AM335x hardware Timer"
+	depends on SOC_AM33XX
+	help
+	  Say yes here to enable own hardware timer for AM335x usable by user-space applications.
+
 endmenu
 
 endif
