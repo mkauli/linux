@@ -17,7 +17,7 @@
 #	define USE_INLINED_FUNCTION inline
 #endif
 
-#define MONITOR_TIME_DIFFERENCE 1
+// #define MONITOR_TIME_DIFFERENCE 1
 // #define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
@@ -155,8 +155,8 @@ static int fip_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FU
 static int fip_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
 static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
 
-static void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
-static void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
+void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
+void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 
 #if defined(USE_DEBUG_PORT)
 static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
@@ -241,12 +241,10 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case IOCTL_FIP_ENABLE_FOREIGN_IRQ:
 		fip_enable_foreign_irq();
-		fip_irq_data.interrupt_enabled = true;
 		break;
 
 	case IOCTL_FIP_DISABLE_FOREIGN_IRQ:
 		fip_disable_foreign_irq();
-		fip_irq_data.interrupt_enabled = false;
 		break;
 
 	default:
@@ -306,6 +304,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		fip_set_debug_port(true);
 #endif
 
+		fip_enable_foreign_irq();
 		tick_period = 100000000; //set period to 100 ms
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
@@ -330,10 +329,12 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
  * @exception
  * @globals
  ***********************************************************************************/
-static void fip_enable_foreign_irq(void)
+void fip_enable_foreign_irq(void)
 {
 	writel_relaxed(0xFF, fip_irq_data.intc_threshold_reg);
+	fip_irq_data.interrupt_enabled = true;
 }
+EXPORT_SYMBOL_GPL(fip_enable_foreign_irq);
 
 /*******************************************************************************/ /*!
  * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
@@ -342,14 +343,16 @@ static void fip_enable_foreign_irq(void)
  * @exception
  * @globals
  ***********************************************************************************/
-static void fip_disable_foreign_irq(void)
+void fip_disable_foreign_irq(void)
 {
 	writel_relaxed(0x05, fip_irq_data.intc_threshold_reg);
+	fip_irq_data.interrupt_enabled = false;
 }
+EXPORT_SYMBOL_GPL(fip_disable_foreign_irq);
 
 #if defined(USE_DEBUG_PORT)
 /*******************************************************************************/ /*!
- * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
+ * @brief  Sets the status of the debug port.
  *
  * @param status: true = set the port ; false = clear the port
  * @return
@@ -433,7 +436,7 @@ static int __init fast_input_port_init(void)
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
 	if ((request_threaded_irq(fip_gpio_data.irq_number, NULL,
 				  (irq_handler_t)fip_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT |
+				  IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT |
 					  IRQF_NO_SUSPEND | IRQF_NO_THREAD |
 					  IRQF_NOBALANCING,
 				  "fip_input", NULL))) {
