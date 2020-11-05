@@ -18,6 +18,7 @@
 #endif
 
 #define MONITOR_TIME_DIFFERENCE 1
+// #define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -91,6 +92,14 @@ struct FipSystemTimerData {
 };
 #endif
 
+//--------------------------------------------------------------------------------------------------
+#if defined(USE_DEBUG_PORT)
+struct FipDebugPort {
+	void __iomem *clear_reg_mem;
+	void __iomem *set_reg_mem;
+};
+#endif
+
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
 	.gpio_id = 44,
@@ -129,6 +138,13 @@ static struct FipSystemTimerData fip_system_timer_data = {
 };
 #endif
 
+#if defined(USE_DEBUG_PORT)
+struct FipDebugPort fip_debug_port = {
+	.clear_reg_mem = NULL,
+	.set_reg_mem = NULL,
+};
+#endif
+
 // ToDo: check if this is neccessary
 extern ktime_t tick_period;
 
@@ -141,6 +157,10 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) US
 
 static void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 static void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
+
+#if defined(USE_DEBUG_PORT)
+static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
+#endif
 
 //==================================================================================================
 static struct file_operations fops = {
@@ -282,12 +302,20 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		}
 #endif
 
+#if defined(USE_DEBUG_PORT)
+		fip_set_debug_port(true);
+#endif
+
 		tick_period = 100000000; //set period to 100 ms
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "fip_irq_handler: cannot send signal\n");
 		}
+
+#if defined(USE_DEBUG_PORT)
+		fip_set_debug_port(false);
+#endif
 
 		return (irq_handler_t)IRQ_HANDLED;
 	}
@@ -318,6 +346,26 @@ static void fip_disable_foreign_irq(void)
 {
 	writel_relaxed(0x05, fip_irq_data.intc_threshold_reg);
 }
+
+#if defined(USE_DEBUG_PORT)
+/*******************************************************************************/ /*!
+ * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
+ *
+ * @param status: true = set the port ; false = clear the port
+ * @return
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void fip_set_debug_port(bool status)
+{
+	if(status) {
+		writel_relaxed(1U << 16, fip_debug_port.set_reg_mem);
+	}
+	else {
+		writel_relaxed(1U << 16, fip_debug_port.clear_reg_mem);
+	}
+}
+#endif
 
 /*******************************************************************************/ /*!
  * @brief  Kernel module initialization function for the module fast_input_port.
@@ -398,6 +446,12 @@ static int __init fast_input_port_init(void)
 	fip_system_timer_data.system_timer_reg = ioremap(0x44E31028, 4);
 #endif
 
+#if defined(USE_DEBUG_PORT)
+	/* debug port settings */
+	fip_debug_port.clear_reg_mem = ioremap(0x481AE190, 4);
+	fip_debug_port.set_reg_mem = ioremap(0x481AE194, 4);
+#endif
+
 	return 0;
 
 irq:
@@ -433,7 +487,8 @@ module_init(fast_input_port_init);
 module_exit(fast_input_port_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Berrux Kana < bkana@leuze.de >; Martin Kaul < martin@familie-kaul.de >");
+MODULE_AUTHOR("Berrux Kana < bkana@leuze.de >");
+MODULE_AUTHOR("Martin Kaul < martin@familie-kaul.de >");
 MODULE_DESCRIPTION(
 	"A fast GPIO Interrupt driver to send the Signal to the userspace");
 MODULE_VERSION("0.1");
