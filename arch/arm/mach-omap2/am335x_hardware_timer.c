@@ -10,12 +10,14 @@
  */
 // #define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
-#	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
+#	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-O0")))
 #	define USE_INLINED_FUNCTION
 #else
 #	define USE_NON_OPTIMIZED_FUNCTION
 #	define USE_INLINED_FUNCTION inline
 #endif
+
+#define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -36,7 +38,7 @@
 #define IOCTL_STOP_TIMER 	_IO('U', 8)
 #define LEW_MICROSECOND    500UL
 
-#define USE_DEBUG_PORT 1
+#define INTC_INTC_ILR0_BASE_REG 0x48200100
 
 //==================================================================================================
 struct FipTimerData {
@@ -46,7 +48,9 @@ struct FipTimerData {
 	struct class *dev_class_timer;
 	struct cdev timer_cdev;
 	struct omap_dm_timer clksrc;
-	unsigned int cycles;
+	unsigned long lew_rate;
+	void __iomem *intc_ilr0_reg_mem;
+	int timer_hwirq_number;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -63,7 +67,9 @@ struct FipTimerData fip_timer_data = {
 	.timer_irq = -1,
 	.dev_timer = 0,
 	.dev_class_timer = NULL,
-	.cycles = 0,
+	.lew_rate = 0,
+	.intc_ilr0_reg_mem = NULL,
+	.timer_hwirq_number = 0,
 };
 
 #if defined(USE_DEBUG_PORT)
@@ -82,8 +88,12 @@ static int omap_dm_timer4_init(struct omap_dm_timer *timer, const char *fck_sour
 static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id) USE_NON_OPTIMIZED_FUNCTION;
 
 #if defined(USE_DEBUG_PORT)
-static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
+static void timer_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
 #endif
+
+//==================================================================================================
+extern void fip_enable_foreign_irq(void);
+extern void fip_disable_foreign_irq(void);
 
 //==================================================================================================
 static struct clock_event_device clockevent_timer = {
@@ -126,11 +136,8 @@ static struct irqaction omap2_timer_irq = {
  ***********************************************************************************/
 static int timer_open(struct inode *inode, struct file *file)
 {
-	unsigned long lew_rate = 0;
-
 	omap2_timer4_clocksource_init(4, "timer_sys_ck", "ti,timer-alwon");
-	lew_rate = ((unsigned long)(1000000000UL/fip_timer_data.clksrc.rate)); // 41 for fip_timer_data.clksrc.rate==24MHz
-    fip_timer_data.cycles = (unsigned int)((LEW_MICROSECOND*1000U)/lew_rate); // 12195 for 500us
+	fip_timer_data.lew_rate = ((unsigned long)(1000000000UL/fip_timer_data.clksrc.rate)); // 41 for fip_timer_data.clksrc.rate==24MHz
 
 	return 0;
 }
@@ -163,16 +170,23 @@ static int timer_release(struct inode *inode, struct file *file)
  ***********************************************************************************/
 static long timer_ioctl(struct file *file, unsigned int cmd, unsigned long arg) // arg in µs
 {
+	unsigned long cycles;
+
 	switch (cmd) {
 		case IOCTL_INIT_TIMER:
 			// set cycles here
 			break;
 
 		case IOCTL_START_TIMER:
+		    cycles = (unsigned int)((arg*1000U)/fip_timer_data.lew_rate); // 12195 for 500us
 			__omap_dm_timer_load_start(&fip_timer_data.clksrc,
-				   OMAP_TIMER_CTRL_ST, (unsigned int)(0xffffffffU - fip_timer_data.cycles),
+				   OMAP_TIMER_CTRL_ST, (unsigned int)(0xffffffffU - cycles),
 				   OMAP_TIMER_NONPOSTED);
-			fip_set_debug_port(true);
+			// fip_enable_foreign_irq();
+
+#if defined(USE_DEBUG_PORT)
+			timer_set_debug_port(true);
+#endif			
  			break;
 
 		case IOCTL_STOP_TIMER:
@@ -269,6 +283,7 @@ static int omap_dm_timer4_init(struct omap_dm_timer *timer,
 	struct device_node *np;
 	struct omap_hwmod *oh;
 	struct clk *src;
+	int timer_ilr0_base_reg;
 
 	np = omap_get_timer_dt(test_module_timer_of_match, property);
 	if (!np) {
@@ -339,6 +354,13 @@ static int omap_dm_timer4_init(struct omap_dm_timer *timer,
 	fip_timer_data.timer_rate = timer->rate;
 	timer->reserved = 1;
 
+	/* set threshold of timer interrupt */
+	of_property_read_s32(np, "interrupts", &fip_timer_data.timer_hwirq_number);
+	timer_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
+				  (fip_timer_data.timer_hwirq_number * 4);
+	fip_timer_data.intc_ilr0_reg_mem = ioremap(timer_ilr0_base_reg, 4);
+	writel_relaxed(1U << 4, fip_timer_data.intc_ilr0_reg_mem);
+
 	return 0;
 }
 
@@ -353,21 +375,25 @@ static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id)
 {
 	__omap_dm_timer_write_status(&fip_timer_data.clksrc, OMAP_TIMER_INT_OVERFLOW);
 
-	fip_set_debug_port(false);
+#if defined(USE_DEBUG_PORT)
+	timer_set_debug_port(false);
+#endif
+
+	fip_disable_foreign_irq();
 
 	return IRQ_HANDLED;
 }
 
 #if defined(USE_DEBUG_PORT)
 /*******************************************************************************/ /*!
- * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
+ * @brief  Sets the status of the debug port.
  *
  * @param status: true = set the port ; false = clear the port
  * @return
  * @exception
  * @globals
  ***********************************************************************************/
-static void fip_set_debug_port(bool status)
+static void timer_set_debug_port(bool status)
 {
 	if(status) {
 		writel_relaxed(1U << 16, fip_debug_port.set_reg_mem);
@@ -413,6 +439,7 @@ static int __init test_module_init(void)
 		printk(KERN_INFO "Cannot create the Device 1\n");
 		goto r_device;
 	}
+
 
 #if defined(USE_DEBUG_PORT)
 	/* debug port settings */
