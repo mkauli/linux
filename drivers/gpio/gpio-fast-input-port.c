@@ -102,7 +102,7 @@ struct FipDebugPort {
 
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
-	.gpio_id = 44,
+	.gpio_id = 47,
 	.irq_number = 0,
 	.intc_ilr0_reg_mem = NULL,
 	.gpio = NULL,
@@ -304,7 +304,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		fip_set_debug_port(true);
 #endif
 
-		fip_enable_foreign_irq();
+		// fip_enable_foreign_irq();
 		tick_period = 100000000; //set period to 100 ms
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
@@ -436,7 +436,7 @@ static int __init fast_input_port_init(void)
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
 	if ((request_threaded_irq(fip_gpio_data.irq_number, NULL,
 				  (irq_handler_t)fip_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT |
+				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT |
 					  IRQF_NO_SUSPEND | IRQF_NO_THREAD |
 					  IRQF_NOBALANCING,
 				  "fip_input", NULL))) {
