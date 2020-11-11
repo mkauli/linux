@@ -152,6 +152,7 @@ static int timer_open(struct inode *inode, struct file *file)
 static int timer_release(struct inode *inode, struct file *file)
 {
     /* Release the IRQ handler */
+    fip_enable_foreign_irq();
     remove_irq(fip_timer_data.timer_irq, &omap2_timer_irq);
 
     /* Release the timer */
