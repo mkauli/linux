@@ -434,11 +434,9 @@ static int __init fast_input_port_init(void)
 	}
 
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
-	if ((request_threaded_irq(fip_gpio_data.irq_number, NULL,
-				  (irq_handler_t)fip_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT |
-					  IRQF_NO_SUSPEND | IRQF_NO_THREAD |
-					  IRQF_NOBALANCING,
+	if ((request_threaded_irq(fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
+				  NULL,
+				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
 				  "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
