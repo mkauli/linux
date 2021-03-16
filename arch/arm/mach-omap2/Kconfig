@@ -239,6 +239,12 @@ config AM335X_HARDWARE_TIMER
 	help
 	  Say yes here to enable own hardware timer for AM335x usable by user-space applications.
 
+config SSI_TIMER
+	bool "AM335x Ssi Timer"
+	depends on SOC_AM33XX
+	help
+	  Say yes here to enable own ssi timer for AM335x.
+
 endmenu
 
 endif

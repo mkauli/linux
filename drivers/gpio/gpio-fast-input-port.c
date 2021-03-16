@@ -42,6 +42,10 @@
 
 extern struct class * class_find( const char * name );
 
+// ssi timer
+extern int ssi_timer_init(void);
+extern int ssi_timer_start(unsigned long arg);
+
 //==================================================================================================
 struct FipGpioData {
 	unsigned int gpio_id;
@@ -102,7 +106,7 @@ struct FipDebugPort {
 
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
-	.gpio_id = 44,
+	.gpio_id = 47,
 	.irq_number = 0,
 	.intc_ilr0_reg_mem = NULL,
 	.gpio = NULL,
@@ -265,6 +269,7 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
+	ssi_timer_start(500);// start SSI timer for 500µs
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
 	unsigned int time_difference;
@@ -305,7 +310,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 #endif
 
 		fip_enable_foreign_irq();
-		tick_period = 100000000; //set period to 100 ms
+		// tick_period = 100000000; //set period to 100 ms
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
@@ -434,15 +439,15 @@ static int __init fast_input_port_init(void)
 	}
 
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
-	if ((request_threaded_irq(fip_gpio_data.irq_number, NULL,
-				  (irq_handler_t)fip_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT |
-					  IRQF_NO_SUSPEND | IRQF_NO_THREAD |
-					  IRQF_NOBALANCING,
+	if ((request_threaded_irq(fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
+				  NULL,
+				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
 				  "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
+
+	ssi_timer_init(); //init ssi timer
 
 #if defined(MONITOR_TIME_DIFFERENCE)
 	/* system timer settings. */

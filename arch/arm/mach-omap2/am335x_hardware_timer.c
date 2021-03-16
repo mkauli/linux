@@ -182,7 +182,7 @@ static long timer_ioctl(struct file *file, unsigned int cmd, unsigned long arg) 
 			__omap_dm_timer_load_start(&fip_timer_data.clksrc,
 				   OMAP_TIMER_CTRL_ST, (unsigned int)(0xffffffffU - cycles),
 				   OMAP_TIMER_NONPOSTED);
-			// fip_enable_foreign_irq();
+			fip_enable_foreign_irq();
 
 #if defined(USE_DEBUG_PORT)
 			timer_set_debug_port(true);
@@ -467,6 +467,8 @@ r_class:
  ***********************************************************************************/
 static void __exit test_module_exit(void)
 {
+	/*Enable irq*/
+	fip_enable_foreign_irq();
     /* stop the timer */
 	__omap_dm_timer_stop(&fip_timer_data.clksrc, OMAP_TIMER_POSTED, fip_timer_data.clksrc.rate);
     /* Release the IRQ handler */
