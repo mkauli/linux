@@ -42,6 +42,10 @@
 
 extern struct class * class_find( const char * name );
 
+// ssi timer
+extern int ssi_timer_init(void);
+extern int ssi_timer_start(unsigned long arg);
+
 //==================================================================================================
 struct FipGpioData {
 	unsigned int gpio_id;
@@ -265,6 +269,7 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
+	ssi_timer_start(500);// start SSI timer for 500µs
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
 	unsigned int time_difference;
@@ -304,8 +309,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		fip_set_debug_port(true);
 #endif
 
-		// fip_enable_foreign_irq();
-		tick_period = 100000000; //set period to 100 ms
+		fip_enable_foreign_irq();
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
@@ -441,6 +445,8 @@ static int __init fast_input_port_init(void)
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
+
+	ssi_timer_init(); //init ssi timer
 
 #if defined(MONITOR_TIME_DIFFERENCE)
 	/* system timer settings. */

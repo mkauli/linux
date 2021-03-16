@@ -214,6 +214,7 @@ obj-$(CONFIG_SOC_OMAP2420)		+= msdi.o
 obj-$(CONFIG_MACH_OMAP_GENERIC)		+= board-generic.o pdata-quirks.o
 obj-$(CONFIG_MACH_NOKIA_N8X0)		+= board-n8x0.o
 obj-$(CONFIG_AM335X_HARDWARE_TIMER)	+= am335x_hardware_timer.o
+obj-$(CONFIG_SSI_TIMER)	+= ssi_timer.o
 
 # Platform specific device init code
 

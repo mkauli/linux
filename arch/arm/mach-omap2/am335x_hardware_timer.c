@@ -468,6 +468,8 @@ r_class:
  ***********************************************************************************/
 static void __exit test_module_exit(void)
 {
+	/*Enable irq*/
+	fip_enable_foreign_irq();
     /* stop the timer */
 	__omap_dm_timer_stop(&fip_timer_data.clksrc, OMAP_TIMER_POSTED, fip_timer_data.clksrc.rate);
     /* Release the IRQ handler */
