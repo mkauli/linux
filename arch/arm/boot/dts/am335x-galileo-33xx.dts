@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * am335x-galileo-33xx.dts - Device Tree file for Leuze Board
+ *
+ * Copyright (C) 2021 Leuze Electronic. - http://www.leuze.com/
+ */
+
+/dts-v1/;
+
+#include "am33xx.dtsi"
+#include "am335x-galileo.dtsi"
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	model = "Galileo AMS1xx";
+	compatible = "ams1xx,galileo-33xx", "ti,am33xx";
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x8000000>;	/* 128 MB */
+	};
+
+        chosen {
+        stdout-path = &uart0;
+    };
+
+};
+
+
+
+
+
+/*&mac {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&cpsw_default>;
+	pinctrl-1 = <&cpsw_sleep>;
+	slaves = <1>;
+	status = "okay";
+};*/
+
+/*&davinci_mdio {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&davinci_mdio_default>;
+	pinctrl-1 = <&davinci_mdio_sleep>;
+	status = "okay";
+
+	ethphy0: ethernet-phy@0 {
+		reg = <0>;
+	};
+};*/
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rs232_ttl_pins_default>;
+
+	status = "okay";
+};
+&spi0 {
+    status = "okay";
+    id = <0>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&spi0_dsp_pins_default>;
+
+    spidev@0 {
+        spi-max-frequency = <24000000>;
+        reg = <0>;
+        compatible = "linux,spidev";
+    };
+};
+
+&timer4 {
+	compatible = "ti,am335x-timer";
+	pinctrl-names = "default";
+	status = "okay";
+	clock-names = "fck";
+	ti,timer-alwon;
+	clocks = <&timer4_fck>;
+};
+
+&timer5 {
+	compatible = "ti,am335x-ssi-timer";
+	pinctrl-names = "default";
+	status = "okay";
+	clock-names = "fck";
+	ti,timer-alwon;
+	clocks = <&timer5_fck>;
+};
+
+&gpmc {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&gpm_flash_pins_default>;
+	ranges = <0 0 0x08000000 0x10000000>;	/* CS0: NAND */
+	nand@0,0 {
+		compatible = "ti,omap2-nand";
+		reg = <0 0 4>; /* CS0, offset 0, IO size 4 */
+		interrupt-parent = <&gpmc>;
+		interrupts = <0 IRQ_TYPE_NONE>, /* fifoevent */
+			     <1 IRQ_TYPE_NONE>;	/* termcount */
+		rb-gpios = <&gpmc 0 GPIO_ACTIVE_HIGH>; /* gpmc_wait0 */
+		/* ti,elm-id = <&elm>; */
+		ti,nand-ecc-opt = "sw";
+		nand-bus-width = <8>;
+		gpmc,device-width = <1>;
+		gpmc,sync-clk-ps = <0>;
+		gpmc,cs-on-ns = <0>;
+		gpmc,cs-rd-off-ns = <44>;
+		gpmc,cs-wr-off-ns = <44>;
+		gpmc,adv-on-ns = <6>;
+		gpmc,adv-rd-off-ns = <34>;
+		gpmc,adv-wr-off-ns = <44>;
+		gpmc,we-on-ns = <0>;
+		gpmc,we-off-ns = <40>;
+		gpmc,oe-on-ns = <0>;
+		gpmc,oe-off-ns = <54>;
+		gpmc,access-ns = <64>;
+		gpmc,rd-cycle-ns = <82>;
+		gpmc,wr-cycle-ns = <82>;
+		gpmc,bus-turnaround-ns = <0>;
+		gpmc,cycle2cycle-delay-ns = <0>;
+		gpmc,clk-activation-ns = <0>;
+		gpmc,wr-access-ns = <40>;
+		gpmc,wr-data-mux-bus-ns = <0>;
+		/* MTD partition table */
+		#address-cells = <1>;
+		#size-cells = <1>;
+		partition@0 {
+			label = "spl";
+			reg = <0x00000000 0x00200000>;
+		};
+		partition@1 {
+			label = "uboot";
+			reg = <0x00200000 0x00100000>;
+		};
+		partition@2 {
+			label = "uboot environment";
+			reg = <0x00300000 0x00100000>;
+		};
+		partition@3 {
+			label = "dtb";
+			reg = <0x00400000 0x00100000>;
+		};
+
+		partition@4 {
+			label = "linux";
+			reg = <0x00900000 0x00600000>;
+		};
+		partition@5 {
+			label = "rootfs";
+			reg = <0x00F00000 0>;
+		};
+	};
+};
+

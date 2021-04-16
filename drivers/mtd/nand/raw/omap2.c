@@ -1792,6 +1792,9 @@ static int omap_get_dt_info(struct device *dev, struct omap_nand_info *info)
 			info->ecc_opt = OMAP_ECC_BCH8_CODE_HW_DETECTION_SW;
 	} else if (!strcmp(s, "bch16")) {
 		info->ecc_opt =	OMAP_ECC_BCH16_CODE_HW;
+/* ??PATCH bkana@leuze.com 2020-04-15 */
+	} else if (!strcmp(s, "none")) {
+		info->ecc_opt = OMAP_ECC_NONE;
 	} else {
 		dev_err(dev, "unrecognized value for ti,nand-ecc-opt\n");
 		return -EINVAL;
@@ -2018,7 +2021,12 @@ static int omap_nand_attach_chip(struct nand_chip *chip)
 		chip->ecc.algo = NAND_ECC_HAMMING;
 		return 0;
 	}
-
+	/* ??PATCH bkana@leuze.com 2020-04-15 */
+	if (info->ecc_opt == OMAP_ECC_NONE) {
+		chip->ecc.mode = NAND_ECC_NONE;
+		chip->ecc.algo = NAND_ECC_HAMMING;
+		return 0;
+	}
 	/* Populate MTD interface based on ECC scheme */
 	switch (info->ecc_opt) {
 	case OMAP_ECC_HAM1_CODE_HW:

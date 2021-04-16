@@ -387,6 +387,16 @@ EXPORT_SYMBOL(nand_calculate_ecc);
  *
  * Detect and correct a 1 bit error for eccsize byte block
  */
+
+/* ??PATCH bkana@leuze.com 2021-04-15 */
+#ifdef CONFIG_SYS_NAND_NO_ECC
+int __nand_correct_data(unsigned char *buf,
+			unsigned char *read_ecc, unsigned char *calc_ecc,
+			unsigned int eccsize, bool sm_order)
+{
+	return 0; //no error
+}
+#else
 int __nand_correct_data(unsigned char *buf,
 			unsigned char *read_ecc, unsigned char *calc_ecc,
 			unsigned int eccsize, bool sm_order)
@@ -459,7 +469,7 @@ int __nand_correct_data(unsigned char *buf,
 	return -EBADMSG;
 }
 EXPORT_SYMBOL(__nand_correct_data);
-
+#endif
 /**
  * nand_correct_data - [NAND Interface] Detect and correct bit error(s)
  * @chip:	NAND chip object

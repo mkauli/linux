@@ -759,6 +759,7 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-boneblack-pps.dtb \
 	am335x-chiliboard.dtb \
 	am335x-cm-t335.dtb \
+	am335x-galileo-33xx.dtb \
 	am335x-evm.dtb \
 	am335x-evmsk.dtb \
 	am335x-guardian.dtb \

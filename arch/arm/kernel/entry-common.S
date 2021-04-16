@@ -159,7 +159,7 @@ ENTRY(ret_from_fork)
 	badrne	lr, 1f
 	retne	r5
 1:	get_thread_info tsk
-	b	ret_slow_syscall
+	b	ret_slow_syscall	
 ENDPROC(ret_from_fork)
 
 /*=============================================================================

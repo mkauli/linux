@@ -36,6 +36,12 @@ comment "Raw/parallel NAND flash controllers"
 
 config MTD_NAND_DENALI
 	tristate
+#??PATCH bkana@leuze.com 2021-04-15
+config SYS_NAND_NO_ECC
+	bool
+	help
+		select this, if ECC is not be used
+	default y
 
 config MTD_NAND_DENALI_PCI
 	tristate "Denali NAND controller on Intel Moorestown"
