@@ -106,7 +106,7 @@ struct FipDebugPort {
 
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
-	.gpio_id = 47,
+	.gpio_id = 22,
 	.irq_number = 0,
 	.intc_ilr0_reg_mem = NULL,
 	.gpio = NULL,
