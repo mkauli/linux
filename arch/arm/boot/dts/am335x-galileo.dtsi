@@ -78,7 +78,7 @@
 
 	gpio_3_pins_default: gpio_3_pins_default {
 		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x9e4, PIN_INPUT | MUX_MODE7) /* (C14) EMU0.gpio3[7] */
+			AM33XX_IOPAD(0x9e4, PIN_OUTPUT | MUX_MODE7) /* (C14) EMU0.gpio3[7] */
 			AM33XX_IOPAD(0x9e8, PIN_INPUT | MUX_MODE7) /* (B14) EMU1.gpio3[8] */
 			AM33XX_IOPAD(0xa34, PIN_INPUT | MUX_MODE7) /* (F15) USB1_DRVVBUS.gpio3[13] */
 			AM33XX_IOPAD(0x9a0, PIN_INPUT | MUX_MODE7) /* (B12) mcasp0_aclkr.gpio3[18] */

@@ -85,6 +85,24 @@
 	clocks = <&timer5_fck>;
 };
 
+&am33xx_pinmux {
+	status = "okay";
+	pinctrl-names = "default" ;
+	pinctrl-0 = <&gpio_0_pins_default>;
+};
+/*&am33xx_pinmux {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&gpio_3_pins_default>;
+};
+
+&am33xx_pinmux {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&gpio_2_pins_default>;
+};*/
+
+
 &gpmc {
 	status = "okay";
 	pinctrl-names = "default";
