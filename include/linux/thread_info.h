@@ -12,6 +12,9 @@
 #include <linux/bug.h>
 #include <linux/restart_block.h>
 
+/* ??PATCH bkana@leuze.com 2020-05-11 */
+#pragma GCC optimize ("O2")
+
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 /*
  * For CONFIG_THREAD_INFO_IN_TASK kernels we need <asm/current.h> for the

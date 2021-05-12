@@ -157,7 +157,6 @@
 			label = "dtb";
 			reg = <0x00400000 0x00100000>;
 		};
-
 		partition@4 {
 			label = "linux";
 			reg = <0x00900000 0x00600000>;
