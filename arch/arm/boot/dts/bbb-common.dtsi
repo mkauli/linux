@@ -512,6 +512,8 @@
 
 &pruss_tm {
 	status = "okay";
+	pinctrl-0 = <&spi_pru_pins_default>;
+	pinctrl-names = "default";
 };
 
 &ocp {
