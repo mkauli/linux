@@ -32,7 +32,7 @@
 #define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
 #define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
 
-#define SIGNAL_FIP 44
+#define SIGNAL_FIP 50
 
 #define START_ADDR 0x48200288
 #define INTC_INTC_ILR0_BASE_REG 0x48200100
@@ -309,8 +309,8 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		fip_set_debug_port(true);
 #endif
 
-		fip_enable_foreign_irq();
 		// tick_period = 100000000; //set period to 100 ms
+		fip_enable_foreign_irq();
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
@@ -441,12 +441,12 @@ static int __init fast_input_port_init(void)
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
 	if ((request_threaded_irq(fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
 				  NULL,
-				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
+//				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
+				  IRQF_TRIGGER_FALLING | IRQF_NO_THREAD | IRQF_NOBALANCING | IRQF_NO_SUSPEND,
 				  "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
-
 	ssi_timer_init(); //init ssi timer
 
 #if defined(MONITOR_TIME_DIFFERENCE)

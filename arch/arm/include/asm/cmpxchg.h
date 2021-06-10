@@ -5,8 +5,7 @@
 #include <linux/irqflags.h>
 #include <linux/prefetch.h>
 #include <asm/barrier.h>
-/* ??PATCH bkana@leuze.com 2020-05-11 */
-#pragma GCC optimize ("O2")
+
 #if defined(CONFIG_CPU_SA1100) || defined(CONFIG_CPU_SA110)
 /*
  * On the StrongARM, "swp" is terminally broken since it bypasses the
