@@ -67,6 +67,19 @@
     };
 };
 
+&i2c0 {
+    status = "okay";
+    pinctrl-names = "default";
+    pinctrl-0 = <&i2c_eeprom_pins_default>;
+	clock-frequency = <400000>; // standard 400Kbits/s
+
+		eeprom@50 {
+				  compatible = "cat,24c64";
+				  reg = <0x50>;
+				  pagesize = <0x20>;	
+		};
+};
+
 &timer4 {
 	compatible = "ti,am335x-timer";
 	pinctrl-names = "default";
