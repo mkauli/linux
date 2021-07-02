@@ -101,8 +101,10 @@
 &am33xx_pinmux {
 	status = "okay";
 	pinctrl-names = "default" ;
-	pinctrl-0 = <&gpio_0_pins_default>;
+	pinctrl-0 = <&gpio_0_1_pins_default>;
 };
+
+
 /*&am33xx_pinmux {
 	status = "okay";
 	pinctrl-names = "default";
