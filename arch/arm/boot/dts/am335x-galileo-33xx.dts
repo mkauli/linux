@@ -115,6 +115,15 @@
 	pinctrl-0 = <&gpio_2_pins_default>;
 };*/
 
+&tscadc {
+	status = "okay";
+	adc {
+		ti,adc-channels = <0 1>;
+		ti,chan-step-avg = <0x16 0x16>;
+		ti,chan-step-opendelay = <0x98 0x98>;
+		ti,chan-step-sampledelay = <0x0 0x0>;
+	};
+};
 
 &gpmc {
 	status = "okay";
