@@ -127,6 +127,12 @@
 	};
 };
 
+&pruss_tm {
+	status = "okay";
+	pinctrl-0 = <&pru1_disp_spi_pins_default>;
+	pinctrl-names = "default";
+};
+
 &gpmc {
 	status = "okay";
 	pinctrl-names = "default";
