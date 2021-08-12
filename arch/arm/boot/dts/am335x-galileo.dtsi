@@ -63,8 +63,6 @@
 		>;
 	};
 
-
-
 	gpio_2_pins_default: gpio_2_pins_default {
 		pinctrl-single,pins = <
 			AM33XX_IOPAD(0x888, PIN_INPUT | MUX_MODE7) /* (T13) gpmc_csn3.gpio2[0] */
@@ -74,7 +72,6 @@
 			AM33XX_IOPAD(0x8f4, PIN_INPUT | MUX_MODE7) /* (F18) mmc0_dat2.gpio2[27] */
 		>;
 	};
-
 
 	gpio_3_pins_default: gpio_3_pins_default {
 		pinctrl-single,pins = <
@@ -88,22 +85,20 @@
 		>;
 	};
 
-
-
-/*	gpio_0_pins_default: gpio_0_pins_default {
+	gpio_0_pins_default: gpio_0_pins_default {
 		pinctrl-single,pins = <
 			AM33XX_IOPAD(0x960, PIN_INPUT | MUX_MODE7) /* (C15) spi0_cs1.gpio0[6] */
-//			AM33XX_IOPAD(0x978, PIN_INPUT | MUX_MODE7) /* (D18) uart1_ctsn.gpio0[12] */
-//			AM33XX_IOPAD(0x97c, PIN_INPUT | MUX_MODE7) /* (D17) uart1_rtsn.gpio0[13] */
-//			AM33XX_IOPAD(0x980, PIN_INPUT | MUX_MODE7) /* (D16) uart1_rxd.gpio0[14] */
-//			AM33XX_IOPAD(0x984, PIN_INPUT | MUX_MODE7) /* (D15) uart1_txd.gpio0[15] */
-//			AM33XX_IOPAD(0x91c, PIN_INPUT | MUX_MODE7) /* (J18) gmii1_txd3.gpio0[16] */
-//			AM33XX_IOPAD(0x820, PIN_INPUT | MUX_MODE7) /* (U10) gpmc_ad8.gpio0[22] */
-//			AM33XX_IOPAD(0x824, PIN_INPUT | MUX_MODE7) /* (T10) gpmc_ad9.gpio0[23] */
-//			AM33XX_IOPAD(0x828, PIN_INPUT | MUX_MODE7) /* (T11) gpmc_ad10.gpio0[26] */
-//			AM33XX_IOPAD(0x82c, PIN_INPUT | MUX_MODE7) /* (U12) gpmc_ad11.gpio0[27] */
-//		>;
-//	};
+			AM33XX_IOPAD(0x978, PIN_INPUT | MUX_MODE7) /* (D18) uart1_ctsn.gpio0[12] */
+			AM33XX_IOPAD(0x97c, PIN_INPUT | MUX_MODE7) /* (D17) uart1_rtsn.gpio0[13] */
+			AM33XX_IOPAD(0x980, PIN_INPUT | MUX_MODE7) /* (D16) uart1_rxd.gpio0[14] */
+			AM33XX_IOPAD(0x984, PIN_INPUT | MUX_MODE7) /* (D15) uart1_txd.gpio0[15] */
+			AM33XX_IOPAD(0x91c, PIN_INPUT | MUX_MODE7) /* (J18) gmii1_txd3.gpio0[16] */
+			AM33XX_IOPAD(0x820, PIN_INPUT | MUX_MODE7) /* (U10) gpmc_ad8.gpio0[22] */
+			AM33XX_IOPAD(0x824, PIN_INPUT | MUX_MODE7) /* (T10) gpmc_ad9.gpio0[23] */
+			AM33XX_IOPAD(0x828, PIN_INPUT | MUX_MODE7) /* (T11) gpmc_ad10.gpio0[26] */
+			AM33XX_IOPAD(0x82c, PIN_INPUT | MUX_MODE7) /* (U12) gpmc_ad11.gpio0[27] */
+		>;
+	};
 
 		gpio_0_1_pins_default: gpio_0_1_pins_default {
 		pinctrl-single,pins = <
@@ -300,5 +295,21 @@
 			AM33XX_IOPAD(0x930, PIN_OUTPUT | MUX_MODE1) /* (L18) gmii1_rxclk.uart2_txd */
 		>;
 	};
+
+    pust: pust {
+            /*
+             * Driver for PRU Userspace trigger, i.e. signal user-space application
+             * the pru system event.
+             */
+
+        compatible = "pust";
+
+        interrupt-parent = <&pruss_intc>;
+        interrupts = <16 17 18 19>;
+        interrupt-names = "trigger0", /* PRU System-Event 16 */
+                          "trigger1", /* PRU System-Event 17 */
+                          "trigger2", /* PRU System-Event 18 */
+                          "trigger3"; /* PRU System-Event 19 */
+    };	
 
 };

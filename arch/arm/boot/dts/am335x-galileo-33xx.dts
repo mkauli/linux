@@ -104,6 +104,11 @@
 	pinctrl-0 = <&gpio_0_1_pins_default>;
 };
 
+&pust
+{
+	status = "okay";
+	compatible = "pust";
+};
 
 /*&am33xx_pinmux {
 	status = "okay";
