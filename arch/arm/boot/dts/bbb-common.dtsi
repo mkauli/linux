@@ -186,10 +186,14 @@
 
 	spi_pru_pins_default: spi_pru_pins_default {
 		pinctrl-single,pins = <
-			AM33XX_IOPAD(AM335X_PIN_MCASP0_ACLKX, PIN_OUTPUT | MUX_MODE5) /* (A13) mcasp0_aclkx.pr1_pru0_pru_r30[0] */
+			AM33XX_IOPAD(AM335X_PIN_MCASP0_ACLKX, PIN_OUTPUT | MUX_MODE7) /* (A13) mcasp0_aclkx.gpio3[14] */
+			AM33XX_IOPAD(AM335X_PIN_MCASP0_FSR, PIN_OUTPUT | MUX_MODE7) /* (C13) mcasp0_fsr.gpio3[19] */
 			AM33XX_IOPAD(AM335X_PIN_MCASP0_FSX, PIN_OUTPUT | MUX_MODE5) /* (B13) mcasp0_fsx.pr1_pru0_pru_r30[1] */
 			AM33XX_IOPAD(AM335X_PIN_MCASP0_AXR0, PIN_OUTPUT | MUX_MODE5) /* (D12) mcasp0_axr0.pr1_pru0_pru_r30[2] */
 			AM33XX_IOPAD(AM335X_PIN_MCASP0_AHCLKR, PIN_OUTPUT | MUX_MODE5) /* (C12) mcasp0_ahclkr.pr1_pru0_pru_r30[3] */
+			AM33XX_IOPAD(AM335X_PIN_GPMC_AD12, PIN_OUTPUT | MUX_MODE6) /* (T12) gpmc_ad12.pr1_pru0_pru_r30[14] */
+			AM33XX_IOPAD(AM335X_PIN_GPMC_AD13, PIN_OUTPUT | MUX_MODE6) /* (R12) gpmc_ad13.pr1_pru0_pru_r30[15] */
+			AM33XX_IOPAD(AM335X_PIN_GPMC_AD15, PIN_INPUT | MUX_MODE6) /* (U13) gpmc_ad15.pr1_pru0_pru_r31[15] */
 		>;
 	};
 
