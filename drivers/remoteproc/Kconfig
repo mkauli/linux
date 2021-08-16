@@ -112,6 +112,22 @@ config PRU_REMOTEPROC
 	  processors on various TI SoCs. It's safe to say N here if you're
 	  not interested in the PRU or if you are unsure.
 
+config PRU_USERSPACE_TRIGGER
+	tristate "TI PRU user-space trigger"
+	depends on TI_PRUSS
+	default TI_PRUSS
+	select PRU_REMOTEPROC
+	select MAILBOX
+	select OMAP2PLUS_MBOX if ARCH_OMAP2PLUS || ARCH_K3
+	help
+	  Support for TI PRU sysfs trigger to the user-space. User-space 
+	  application can poll the sysfs node for trigger when PRU generates
+	  an interrupt.
+
+	  Say Y or M here to support the User-Space trigger of the Programmable 
+	  Realtime Unit (PRU) processors on various TI SoCs. It's safe to 
+	  say N here if you're not interested in the PRU or if you are unsure.
+
 config QCOM_RPROC_COMMON
 	tristate
 
