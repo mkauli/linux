@@ -156,3 +156,22 @@
 	// 	};
 	// };
 };
+
+/ {
+        pust: pust {
+                /*
+                 * Driver for PRU Userspace trigger, i.e. signal user-space application
+                 * the pru system event.
+                 */
+
+                compatible = "pust";
+
+                interrupt-parent = <&pruss_intc>;
+                interrupts = <16 17 18 19>;
+                interrupt-names = "trigger0", /* PRU System-Event 16 */
+                                  "trigger1", /* PRU System-Event 17 */
+                                  "trigger2", /* PRU System-Event 18 */
+                                  "trigger3"; /* PRU System-Event 19 */
+        };
+
+};

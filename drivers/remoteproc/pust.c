@@ -427,6 +427,9 @@ static struct platform_driver pust_platform_driver = {
 };
 module_platform_driver(pust_platform_driver);
 
+//==================================================================================================
+
 MODULE_AUTHOR("Martin Kaul <martin@familie-kaul.de>");
 MODULE_DESCRIPTION("PRU-Userspace-Trigger");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1");
