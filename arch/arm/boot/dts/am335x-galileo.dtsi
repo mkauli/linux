@@ -209,8 +209,9 @@
 
 	pru0_ssi_pins_default: pru0_ssi_pins_default {
 		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x900, PIN_OUTPUT | MUX_MODE5) /* (G17) mmc0_clk.pr1_pru0_pru_r30[12] */
-			AM33XX_IOPAD(0x904, PIN_OUTPUT | MUX_MODE5) /* (G18) mmc0_cmd.pr1_pru0_pru_r30[13] */
+			AM33XX_IOPAD(0x8fc, PIN_OUTPUT | MUX_MODE5) /* (G16) mmc0_dat0.pr1_pru0_pru_r30[11] */
+			AM33XX_IOPAD(0x830, PIN_OUTPUT | MUX_MODE6) /* (T12) gpmc_ad12.pr1_pru0_pru_r30[14] */
+			AM33XX_IOPAD(0x900, PIN_INPUT | MUX_MODE6) /* (G17) mmc0_clk.pr1_pru0_pru_r30[12] */
 		>;
 	};
 
