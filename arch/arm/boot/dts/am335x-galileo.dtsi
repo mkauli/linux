@@ -41,7 +41,6 @@
 
 	gpio_1_pins_default: gpio_1_pins_default {
 		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x830, PIN_OUTPUT | MUX_MODE7) /* (T12) gpmc_ad12.gpio1[12] */
 			AM33XX_IOPAD(0x834, PIN_OUTPUT | MUX_MODE7) /* (R12) gpmc_ad13.gpio1[13] */
 			AM33XX_IOPAD(0x838, PIN_OUTPUT | MUX_MODE7) /* (V13) gpmc_ad14.gpio1[14] */
 			AM33XX_IOPAD(0x83c, PIN_OUTPUT| MUX_MODE7) /* (U13) gpmc_ad15.gpio1[15] */
@@ -96,7 +95,6 @@
 			AM33XX_IOPAD(0x820, PIN_INPUT | MUX_MODE7) /* (U10) gpmc_ad8.gpio0[22] */
 			AM33XX_IOPAD(0x824, PIN_INPUT | MUX_MODE7) /* (T10) gpmc_ad9.gpio0[23] */
 			AM33XX_IOPAD(0x828, PIN_INPUT | MUX_MODE7) /* (T11) gpmc_ad10.gpio0[26] */
-			AM33XX_IOPAD(0x82c, PIN_INPUT | MUX_MODE7) /* (U12) gpmc_ad11.gpio0[27] */
 		>;
 	};
 
@@ -112,9 +110,7 @@
 			AM33XX_IOPAD(0x820, PIN_INPUT | MUX_MODE7) /* (U10) gpmc_ad8.gpio0[22] */
 			AM33XX_IOPAD(0x824, PIN_INPUT | MUX_MODE7) /* (T10) gpmc_ad9.gpio0[23] */
 			AM33XX_IOPAD(0x828, PIN_INPUT | MUX_MODE7) /* (T11) gpmc_ad10.gpio0[26] */
-			AM33XX_IOPAD(0x82c, PIN_INPUT | MUX_MODE7) /* (U12) gpmc_ad11.gpio0[27] */
 			/*GPIO 1*/
-			AM33XX_IOPAD(0x830, PIN_OUTPUT | MUX_MODE7) /* (T12) gpmc_ad12.gpio1[12] */
 			AM33XX_IOPAD(0x834, PIN_OUTPUT | MUX_MODE7) /* (R12) gpmc_ad13.gpio1[13] */
 			AM33XX_IOPAD(0x838, PIN_OUTPUT | MUX_MODE7) /* (V13) gpmc_ad14.gpio1[14] */
 			AM33XX_IOPAD(0x83c, PIN_OUTPUT| MUX_MODE7) /* (U13) gpmc_ad15.gpio1[15] */
@@ -206,25 +202,17 @@
 		>;
 	};
 
-
-	pru0_ssi_pins_default: pru0_ssi_pins_default {
+	pruss12_galileo_pins_default: pruss12_galileo_pins_default {
 		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x8fc, PIN_OUTPUT | MUX_MODE5) /* (G16) mmc0_dat0.pr1_pru0_pru_r30[11] */
-			AM33XX_IOPAD(0x830, PIN_OUTPUT | MUX_MODE6) /* (T12) gpmc_ad12.pr1_pru0_pru_r30[14] */
-			AM33XX_IOPAD(0x900, PIN_INPUT | MUX_MODE6) /* (G17) mmc0_clk.pr1_pru0_pru_r30[12] */
+			AM33XX_IOPAD(0x8e0, PIN_OUTPUT | MUX_MODE5) /* (U5) lcd_vsync.pr1_pru1_pru_r30[8] -> Display CS*/
+			AM33XX_IOPAD(0x8e4, PIN_OUTPUT | MUX_MODE5) /* (R5) lcd_hsync.pr1_pru1_pru_r30[9] -> Display MOSI*/
+			AM33XX_IOPAD(0x8e8, PIN_OUTPUT | MUX_MODE5) /* (V5) lcd_pclk.pr1_pru1_pru_r30[10] -> Display CLK*/
+			AM33XX_IOPAD(0x8fc, PIN_OUTPUT | MUX_MODE5) /* (G16) mmc0_dat0.pr1_pru0_pru_r30[11] -> SSI Data*/
+			AM33XX_IOPAD(0x900, PIN_INPUT | MUX_MODE6) /* (G17) mmc0_clk.pr1_pru0_pru_r31[12] -> SSI Clk*/
+			AM33XX_IOPAD(0x830, PIN_OUTPUT | MUX_MODE7) /* (T12) gpmc_ad12.gpio1[12] -> Display RESET*/
+			AM33XX_IOPAD(0x82c, PIN_OUTPUT | MUX_MODE7) /* (U12) gpmc_ad11.gpio0[27] -> Display C/D*/
 		>;
 	};
-
-
-
-	pru1_disp_spi_pins_default: pru1_disp_spi_pins_default {
-		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x8e0, PIN_OUTPUT | MUX_MODE5) /* (U5) lcd_vsync.pr1_pru1_pru_r30[8] */
-			AM33XX_IOPAD(0x8e4, PIN_OUTPUT | MUX_MODE5) /* (R5) lcd_hsync.pr1_pru1_pru_r30[9] */
-			AM33XX_IOPAD(0x8e8, PIN_OUTPUT | MUX_MODE5) /* (V5) lcd_pclk.pr1_pru1_pru_r30[10] */
-		>;
-	};
-
 
 	ethernet_service_pins_default: ethernet_service_pins_default {
 		pinctrl-single,pins = <

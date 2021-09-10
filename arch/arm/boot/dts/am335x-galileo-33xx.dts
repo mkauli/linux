@@ -128,7 +128,7 @@
 
 &pruss_tm {
 	status = "okay";
-	pinctrl-0 = <&pru1_disp_spi_pins_default>;
+	pinctrl-0 = <&pruss12_galileo_pins_default>;
 	pinctrl-names = "default";
 };
 
