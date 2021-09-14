@@ -32,8 +32,6 @@
 #define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
 #define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
 
-#define SIGNAL_FIP 50
-
 #define START_ADDR 0x48200288
 #define INTC_INTC_ILR0_BASE_REG 0x48200100
 
@@ -106,7 +104,7 @@ struct FipDebugPort {
 
 //==================================================================================================
 static struct FipGpioData fip_gpio_data = {
-	.gpio_id = 22,
+	.gpio_id = CONFIG_GPIO_FAST_INPUT_PORT_ID,
 	.irq_number = 0,
 	.intc_ilr0_reg_mem = NULL,
 	.gpio = NULL,
@@ -225,7 +223,7 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case IOCTL_FIP_SET_VARIABLES:
 		memset(&fip_us_app_info.signal_info, 0,
 		       sizeof(struct kernel_siginfo));
-		fip_us_app_info.signal_info.si_signo = SIGNAL_FIP;
+		fip_us_app_info.signal_info.si_signo = CONFIG_GPIO_FAST_INPUT_PORT_SIGNO;
 		fip_us_app_info.signal_info.si_code = SI_KERNEL;
 
 		if (copy_from_user(&args, (struct FipIoctlInfo *)arg,
@@ -311,7 +309,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 
 		// tick_period = 100000000; //set period to 100 ms
 		fip_enable_foreign_irq();
-		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
+		if (send_sig_info(CONFIG_GPIO_FAST_INPUT_PORT_SIGNO, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "fip_irq_handler: cannot send signal\n");
