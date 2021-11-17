@@ -101,6 +101,7 @@
 		gpio_0_1_pins_default: gpio_0_1_pins_default {
 		pinctrl-single,pins = <
 			/*GPIO 0*/
+			AM33XX_IOPAD(0x964, PIN_INPUT_PULLUP | MUX_MODE7) /* (C18) eCAP0_in_PWM0_out.gpio0[7] */
 			AM33XX_IOPAD(0x960, PIN_INPUT | MUX_MODE7) /* (C15) spi0_cs1.gpio0[6] */
 			AM33XX_IOPAD(0x978, PIN_INPUT | MUX_MODE7) /* (D18) uart1_ctsn.gpio0[12] */
 			AM33XX_IOPAD(0x97c, PIN_INPUT | MUX_MODE7) /* (D17) uart1_rtsn.gpio0[13] */
