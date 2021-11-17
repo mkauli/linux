@@ -146,6 +146,7 @@
 		rb-gpios = <&gpmc 0 GPIO_ACTIVE_HIGH>; /* gpmc_wait0 */
 		/* ti,elm-id = <&elm>; */
 		ti,nand-ecc-opt = "sw";
+		
 		nand-bus-width = <8>;
 		gpmc,device-width = <1>;
 		gpmc,sync-clk-ps = <0>;
