@@ -10,11 +10,11 @@
  */
 // #define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
-#	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
-#	define USE_INLINED_FUNCTION
+#define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
+#define USE_INLINED_FUNCTION
 #else
-#	define USE_NON_OPTIMIZED_FUNCTION
-#	define USE_INLINED_FUNCTION inline
+#define USE_NON_OPTIMIZED_FUNCTION
+#define USE_INLINED_FUNCTION inline
 #endif
 
 // #define MONITOR_TIME_DIFFERENCE 1
@@ -40,7 +40,7 @@
 #define INCT_CONTROL_BASE 0x48200000
 #define INTC_THRESHOLD 0x0068
 
-extern struct class * class_find( const char * name );
+extern struct class *class_find(const char *name);
 
 // ssi timer
 extern int ssi_timer_init(void);
@@ -88,7 +88,7 @@ struct FipInterruptData {
 //--------------------------------------------------------------------------------------------------
 #if defined(MONITOR_TIME_DIFFERENCE)
 struct FipSystemTimerData {
-	void __iomem * system_timer_reg;
+	void __iomem *system_timer_reg;
 	unsigned int init_counter;
 	unsigned int max_time_value;
 	unsigned int min_time_value;
@@ -153,11 +153,15 @@ struct FipDebugPort fip_debug_port = {
 extern ktime_t tick_period;
 
 //==================================================================================================
-static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
-				     struct pt_regs *regs) USE_NON_OPTIMIZED_FUNCTION;
-static int fip_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
-static int fip_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
-static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
+static irq_handler_t
+fip_irq_handler(unsigned int irq, void *dev_id,
+		struct pt_regs *regs) USE_NON_OPTIMIZED_FUNCTION;
+static int fip_open(struct inode *inode,
+		    struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static int fip_release(struct inode *inode,
+		       struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static long fip_ioctl(struct file *file, unsigned int cmd,
+		      unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
 
 void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
@@ -269,36 +273,45 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
-	ssi_timer_start(500);// start SSI timer for 500µs
+	ssi_timer_start(500); // start SSI timer for 500µs
 #if defined(MONITOR_TIME_DIFFERENCE)
-	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
+	unsigned int time_value =
+		readl_relaxed(fip_system_timer_data.system_timer_reg);
 	unsigned int time_difference;
 #endif
 
 	writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
 
 	if (fip_us_app_info.app_task != NULL) {
-
 #if defined(MONITOR_TIME_DIFFERENCE)
-		if(!fip_irq_data.interrupt_enabled) {
-			if(fip_system_timer_data.init_counter > 0) {
-				fip_system_timer_data.last_time_value = time_value;
+		if (!fip_irq_data.interrupt_enabled) {
+			if (fip_system_timer_data.init_counter > 0) {
+				fip_system_timer_data.last_time_value =
+					time_value;
 				fip_system_timer_data.init_counter--;
 				fip_system_timer_data.max_time_value = 0;
-				fip_system_timer_data.min_time_value = 0xFFFFFFFF;
-			}
-			else {
-				time_difference = (time_value - fip_system_timer_data.last_time_value);
-				if(time_difference > fip_system_timer_data.max_time_value) {
-					fip_system_timer_data.max_time_value = time_difference;
+				fip_system_timer_data.min_time_value =
+					0xFFFFFFFF;
+			} else {
+				time_difference =
+					(time_value -
+					 fip_system_timer_data.last_time_value);
+				if (time_difference >
+				    fip_system_timer_data.max_time_value) {
+					fip_system_timer_data.max_time_value =
+						time_difference;
 				}
-				if(time_difference < fip_system_timer_data.min_time_value) {
-					fip_system_timer_data.min_time_value = time_difference;
+				if (time_difference <
+				    fip_system_timer_data.min_time_value) {
+					fip_system_timer_data.min_time_value =
+						time_difference;
 				}
-				fip_system_timer_data.last_time_value = time_value;
+				fip_system_timer_data.last_time_value =
+					time_value;
 			}
 
-			if(fip_system_timer_data.max_time_value > (9600000+8400)) {
+			if (fip_system_timer_data.max_time_value >
+			    (9600000 + 8400)) {
 				static int counter = 0;
 				counter++;
 			}
@@ -366,10 +379,9 @@ EXPORT_SYMBOL_GPL(fip_disable_foreign_irq);
  ***********************************************************************************/
 static void fip_set_debug_port(bool status)
 {
-	if(status) {
+	if (status) {
 		writel_relaxed(1U << 16, fip_debug_port.set_reg_mem);
-	}
-	else {
+	} else {
 		writel_relaxed(1U << 16, fip_debug_port.clear_reg_mem);
 	}
 }
@@ -439,11 +451,13 @@ static int __init fast_input_port_init(void)
 	}
 
 	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
-	if ((request_threaded_irq(fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
-				  NULL,
-//				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
-				  IRQF_TRIGGER_FALLING | IRQF_NO_THREAD | IRQF_NOBALANCING | IRQF_NO_SUSPEND,
-				  "fip_input", NULL))) {
+	if ((request_threaded_irq(
+		    fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
+		    NULL,
+		    //				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
+		    IRQF_TRIGGER_FALLING | IRQF_NOBALANCING |
+			    IRQF_NO_SUSPEND,
+		    "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
