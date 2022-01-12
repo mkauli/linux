@@ -121,7 +121,7 @@ static const struct of_device_id test_module_timer_of_match[] = {
 //--------------------------------------------------------------------------------------------------
 static struct irqaction omap2_timer_irq = {
 	.name		= "hadware_timer",
-	.flags		= IRQF_TIMER | IRQF_ONESHOT,
+	.flags		= __IRQF_TIMER | IRQF_NO_SUSPEND | IRQF_ONESHOT,
 	.handler	= omap2_timer_interrupt,
 };
 

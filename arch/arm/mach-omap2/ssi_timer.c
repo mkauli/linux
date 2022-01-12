@@ -15,7 +15,7 @@
 #define USE_INLINED_FUNCTION inline
 #endif
 
-#define USE_DEBUG_PORT 1
+#define USE_DEBUG_PORT 0
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -482,19 +482,11 @@ static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id)
 	__omap_dm_timer_write_status(&ssi_timer_data.clksrc,
 				     OMAP_TIMER_INT_OVERFLOW);
 	if (ssi_us_app_info.app_task != NULL) {
-#if defined(USE_DEBUG_PORT)
-		timer_set_debug_port(true);
-		for (counter = 0; counter < 2000; counter++) {
-			/* code */
-		}
-		timer_set_debug_port(false);
-#endif
 		if (send_sig_info(SIGNAL_SSI, &ssi_us_app_info.signal_info,
 				  ssi_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
-			       "fip_irq_handler: cannot send signal\n");
+			       "SSI, omap2_timer_interrupt : cannot send signal\n");
 		}
-		//return IRQ_HANDLED;
 	}
 	return IRQ_HANDLED;
 }
