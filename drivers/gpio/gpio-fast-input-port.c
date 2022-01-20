@@ -18,7 +18,7 @@
 #endif
 
 // #define MONITOR_TIME_DIFFERENCE 1
-// #define USE_DEBUG_PORT 1
+//#define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -168,6 +168,7 @@ void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 
 #if defined(USE_DEBUG_PORT)
 static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
+volatile int counter;
 #endif
 
 //==================================================================================================
@@ -274,6 +275,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
 	ssi_timer_start(500); // start SSI timer for 500µs
+	
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value =
 		readl_relaxed(fip_system_timer_data.system_timer_reg);
@@ -317,23 +319,19 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 			}
 		}
 #endif
-
 #if defined(USE_DEBUG_PORT)
+		fip_set_debug_port(false); //GPIO104
+
+		for (counter = 0; counter < 1000; counter++) {
+			/* code */
+		}
 		fip_set_debug_port(true);
 #endif
-
-		// tick_period = 100000000; //set period to 100 ms
-		fip_enable_foreign_irq();
 		if (send_sig_info(SIGNAL_FIP, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "fip_irq_handler: cannot send signal\n");
 		}
-
-#if defined(USE_DEBUG_PORT)
-		fip_set_debug_port(false);
-#endif
-
 		return (irq_handler_t)IRQ_HANDLED;
 	}
 
@@ -380,9 +378,9 @@ EXPORT_SYMBOL_GPL(fip_disable_foreign_irq);
 static void fip_set_debug_port(bool status)
 {
 	if (status) {
-		writel_relaxed(1U << 16, fip_debug_port.set_reg_mem);
+		writel_relaxed(1U << 8, fip_debug_port.set_reg_mem);
 	} else {
-		writel_relaxed(1U << 16, fip_debug_port.clear_reg_mem);
+		writel_relaxed(1U << 8, fip_debug_port.clear_reg_mem);
 	}
 }
 #endif
@@ -406,6 +404,7 @@ static int __init fast_input_port_init(void)
 	gpio_request(fip_gpio_data.gpio_id, "sysfs");
 	gpio_direction_input(fip_gpio_data.gpio_id);
 	gpio_export(fip_gpio_data.gpio_id, false);
+
 
 	fip_gpio_data.irq_number = gpio_to_irq(fip_gpio_data.gpio_id);
 	fip_gpio_data.gpio = gpio_to_desc(fip_gpio_data.gpio_id);

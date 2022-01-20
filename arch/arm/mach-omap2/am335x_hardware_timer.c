@@ -17,7 +17,7 @@
 #	define USE_INLINED_FUNCTION inline
 #endif
 
-#define USE_DEBUG_PORT 1
+//#define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
 #include <linux/module.h>

@@ -15,7 +15,7 @@
 #define USE_INLINED_FUNCTION inline
 #endif
 
-#define USE_DEBUG_PORT 0
+//#define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -62,6 +62,7 @@ omap2_timer_interrupt(int irq, void *dev_id) USE_NON_OPTIMIZED_FUNCTION;
 
 #if defined(USE_DEBUG_PORT)
 static void timer_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
+static volatile int counter;
 #endif
 
 //==================================================================================================
@@ -170,7 +171,7 @@ static struct SsiDebugPort ssi_debug_port = {
 
 //==================================================================================================
 static struct clock_event_device clockevent_timer = {
-	.features = CLOCK_EVT_FEAT_ONESHOT,
+	.features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC,
 	.rating = 300,
 	.min_delta_ns = 1000,
 	.max_delta_ns = 500000,
@@ -185,7 +186,7 @@ static const struct of_device_id test_module_timer_of_match[] = {
 //--------------------------------------------------------------------------------------------------
 static struct irqaction omap2_timer_irq = {
 	.name = "SSI_timer",
-	.flags = __IRQF_TIMER | IRQF_NO_SUSPEND | IRQF_ONESHOT,
+	.flags = IRQF_TIMER | IRQF_ONESHOT,
 	.handler = omap2_timer_interrupt,
 };
 
@@ -475,18 +476,26 @@ static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
  * @globals
  ***********************************************************************************/
 
-volatile int counter;
+
 
 static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id)
 {
 	__omap_dm_timer_write_status(&ssi_timer_data.clksrc,
 				     OMAP_TIMER_INT_OVERFLOW);
 	if (ssi_us_app_info.app_task != NULL) {
+#if defined(USE_DEBUG_PORT)
+		timer_set_debug_port(true);
+		for (counter = 0; counter < 2000; counter++) {
+			/* code */
+		}
+		timer_set_debug_port(false);
+#endif
 		if (send_sig_info(SIGNAL_SSI, &ssi_us_app_info.signal_info,
 				  ssi_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
-			       "SSI, omap2_timer_interrupt : cannot send signal\n");
+			       "fip_irq_handler: cannot send signal\n");
 		}
+		return IRQ_HANDLED;
 	}
 	return IRQ_HANDLED;
 }
