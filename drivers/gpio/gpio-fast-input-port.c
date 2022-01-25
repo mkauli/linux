@@ -8,7 +8,7 @@
  * Copyright (C) 2020 Martin Kaul <private>
  * Reformat & enhanced by Martin Kaul <martin@familie-kaul.de>
  */
-// #define ENABLE_DEBUGGING 1
+//#define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
 #define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
 #define USE_INLINED_FUNCTION
@@ -17,7 +17,7 @@
 #define USE_INLINED_FUNCTION inline
 #endif
 
-// #define MONITOR_TIME_DIFFERENCE 1
+//#define MONITOR_TIME_DIFFERENCE 1
 //#define USE_DEBUG_PORT 1
 
 #include <linux/init.h>
@@ -275,7 +275,7 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
 	ssi_timer_start(500); // start SSI timer for 500µs
-	
+
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value =
 		readl_relaxed(fip_system_timer_data.system_timer_reg);
