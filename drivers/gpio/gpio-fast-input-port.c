@@ -8,7 +8,7 @@
  * Copyright (C) 2020 Martin Kaul <private>
  * Reformat & enhanced by Martin Kaul <martin@familie-kaul.de>
  */
-//#define ENABLE_DEBUGGING 1
+#define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
 #define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
 #define USE_INLINED_FUNCTION
