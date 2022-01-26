@@ -171,7 +171,7 @@ static struct SsiDebugPort ssi_debug_port = {
 
 //==================================================================================================
 static struct clock_event_device clockevent_timer = {
-	.features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC,
+	.features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC, //TODO check those values. is periodic fine/needed? also probably max_delta is too small...
 	.rating = 300,
 	.min_delta_ns = 1000,
 	.max_delta_ns = 500000,
@@ -208,7 +208,7 @@ static long ssi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	if (copy_from_user(&args, (struct SSiIoctlInfo *)arg,
 			   sizeof(struct SSiIoctlInfo))) {
-		printk(KERN_INFO "fip_ioctl: cannot copy user arguments");
+		printk(KERN_INFO "ssi_ioctl: cannot copy user arguments");
 		return -EACCES;
 	}
 	ssi_us_app_info.pid = args.pid;
@@ -493,7 +493,7 @@ static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id)
 		if (send_sig_info(SIGNAL_SSI, &ssi_us_app_info.signal_info,
 				  ssi_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
-			       "fip_irq_handler: cannot send signal\n");
+			       "SSI, omap2_timer_interrupt : cannot send signal\n");
 		}
 		return IRQ_HANDLED;
 	}
