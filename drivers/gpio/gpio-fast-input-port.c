@@ -27,7 +27,6 @@
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/sched/signal.h>
-#include <linux/semaphore.h>
 
 #define IOCTL_FIP_SET_VARIABLES _IO('U', 0)
 #define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
@@ -44,9 +43,6 @@ extern struct class *class_find(const char *name);
 // ssi timer
 extern int ssi_timer_init(void);
 extern int ssi_timer_start(unsigned long arg);
-
-// Semaphore
-static struct semaphore sem;
 
 //==================================================================================================
 struct FipGpioData {
@@ -160,7 +156,6 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 static int fip_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
 static int fip_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
 static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
-static ssize_t fip_read(struct file *file, char *buffer, size_t lenght, loff_t *offset) USE_NON_OPTIMIZED_FUNCTION;
 
 void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
@@ -174,7 +169,6 @@ volatile int counter;
 static struct file_operations fops = {
 	.owner = THIS_MODULE,
 	.open = fip_open,
-	.read = fip_read,
 	.unlocked_ioctl = fip_ioctl,
 	.release = fip_release,
 };
@@ -215,25 +209,6 @@ static int fip_release(struct inode *inode, struct file *file)
 }
 
 /*******************************************************************************/ /*!
- * @brief  read function.
- *
- * @return 0: success
- * @exception
- * @globals
- ***********************************************************************************/
-static ssize_t fip_read(struct file *file, char *buffer, size_t lenght, loff_t *offset)
-{
-	/*while(sem == 1)
-	{
-		//wait		
-	}
-	down(&sem);*/
-
-
-//	down(&sem);	
-}
-
-/*******************************************************************************/ /*!
  * @brief  Ioctl function that will be called when the user space application
  *         performs an ioctl call on the device.
  *
@@ -247,7 +222,6 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case IOCTL_FIP_SET_VARIABLES:
-		//down(&sem);
 		memset(&fip_us_app_info.signal_info, 0,
 		       sizeof(struct kernel_siginfo));
 		fip_us_app_info.signal_info.si_signo = CONFIG_GPIO_FAST_INPUT_PORT_SIGNO;
@@ -335,15 +309,11 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 		fip_set_debug_port(true);
 #endif
 
-		// tick_period = 100000000; //set period to 100 ms
-		//up(&sem);
-		down(&sem);
 		if (send_sig_info(CONFIG_GPIO_FAST_INPUT_PORT_SIGNO, &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "fip_irq_handler: cannot send signal\n");
 		}
-		up(&sem);
 
 #if defined(USE_DEBUG_PORT)
 		fip_set_debug_port(false);
@@ -432,9 +402,6 @@ static int __init fast_input_port_init(void)
 		fip_gpio_data.parent_irqd->irq_data.hwirq;
 	gpio_bank_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
 				  (fip_gpio_data.gpio_bank_hwirq_number * 4);
-
-	/* Init semaphore */
-	sema_init( &sem, 1);			  
 
 	/* Allocating Major number */
 	if ((alloc_chrdev_region(&fip_device_info.device, 0, 1,
