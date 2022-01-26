@@ -62,6 +62,7 @@ modules.order
 /System.map
 /Module.markers
 /modules.builtin.modinfo
+/arch/arm/mach-omap2/ssi_timer.c
 
 #
 # RPM spec file (make rpm-pkg)

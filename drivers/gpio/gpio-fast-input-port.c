@@ -39,7 +39,7 @@
 #define INCT_CONTROL_BASE 0x48200000
 #define INTC_THRESHOLD 0x0068
 
-extern struct class * class_find( const char * name );
+extern struct class *class_find(const char *name);
 
 // ssi timer
 extern int ssi_timer_init(void);
@@ -167,6 +167,7 @@ void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
 
 #if defined(USE_DEBUG_PORT)
 static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
+volatile int counter;
 #endif
 
 //==================================================================================================
@@ -293,7 +294,8 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
-	ssi_timer_start(500);// start SSI timer for 500µs
+	ssi_timer_start(500); // start SSI timer for 500µs
+	
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
 	unsigned int time_difference;
@@ -334,7 +336,6 @@ static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 #endif
 
 		// tick_period = 100000000; //set period to 100 ms
-		fip_enable_foreign_irq();
 		//up(&sem);
 		down(&sem);
 		if (send_sig_info(CONFIG_GPIO_FAST_INPUT_PORT_SIGNO, &fip_us_app_info.signal_info,
@@ -393,11 +394,10 @@ EXPORT_SYMBOL_GPL(fip_disable_foreign_irq);
  ***********************************************************************************/
 static void fip_set_debug_port(bool status)
 {
-	if(status) {
-		writel_relaxed(1U << 16, fip_debug_port.set_reg_mem);
-	}
-	else {
-		writel_relaxed(1U << 16, fip_debug_port.clear_reg_mem);
+	if (status) {
+		writel_relaxed(1U << 8, fip_debug_port.set_reg_mem);
+	} else {
+		writel_relaxed(1U << 8, fip_debug_port.clear_reg_mem);
 	}
 }
 #endif
@@ -421,6 +421,7 @@ static int __init fast_input_port_init(void)
 	gpio_request(fip_gpio_data.gpio_id, "sysfs");
 	gpio_direction_input(fip_gpio_data.gpio_id);
 	gpio_export(fip_gpio_data.gpio_id, false);
+
 
 	fip_gpio_data.irq_number = gpio_to_irq(fip_gpio_data.gpio_id);
 	fip_gpio_data.gpio = gpio_to_desc(fip_gpio_data.gpio_id);
@@ -530,3 +531,4 @@ MODULE_AUTHOR("Martin Kaul < martin@familie-kaul.de >");
 MODULE_DESCRIPTION(
 	"A fast GPIO Interrupt driver to send the Signal to the userspace");
 MODULE_VERSION("0.1");
+
