@@ -79,6 +79,36 @@ static u32 intc_readl(u32 reg)
 	return readl_relaxed(omap_irq_base + reg);
 }
 
+//??PATCH dspindl@leuze.com added functions to set the interrupt priority threshold,
+// to set the priority of an interrupt and to enable/disable low-prio interrupts
+
+//extern void am335x_set_debug_port(u8 port_number, bool status);
+
+void omap_intc_set_threshold(u8 value)
+{
+	intc_writel(INTC_THRESHOLD, value);
+}
+
+void omap_intc_set_irq_priority(u8 irq_number, u8 priority)
+{
+	intc_writel(INTC_ILR0 + ( 0x4 * irq_number ), ( priority << 2 ));
+}
+
+void omap_intc_enable_low_prio_irqs(void)
+{
+	omap_intc_set_threshold(0x20);
+
+//	am335x_set_debug_port(8, true);
+}
+
+void omap_intc_disable_low_prio_irqs(void)
+{
+	omap_intc_set_threshold(0x05);
+
+//	am335x_set_debug_port(8, false);
+}
+//??PATCH end of patch
+
 void omap_intc_save_context(void)
 {
 	int i;
@@ -326,12 +356,8 @@ static int __init omap_init_irq(u32 base, struct device_node *node)
 
 	//??PATCH martin@familie-kaul.de set threshold level of all interrupts
 	for (i = 0; i < omap_nr_irqs; i++) {
-		intc_writel(INTC_ILR0 + 0x4 * i, 0x40);
+		omap_intc_set_irq_priority(i, 0x10);
 	}
-	// intc_writel(INTC_ILR0 + (0x4 * 68), 0x40);
-	// intc_writel(INTC_ILR0 + (0x4 * 3), 0x40);
-	// intc_writel(INTC_ILR0 + (0x4 * 12), 0x40);
-	// intc_writel(INTC_ILR0 + (0x4 * 14), 0x40);
 
 	return ret;
 }
