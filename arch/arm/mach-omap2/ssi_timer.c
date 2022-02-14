@@ -6,6 +6,7 @@
  * Written by Berrux Kana < bkana@leuze.de >
  *
  */
+
 //#define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
 #define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-O0")))
@@ -15,7 +16,8 @@
 #define USE_INLINED_FUNCTION inline
 #endif
 
-//#define USE_DEBUG_PORT 1
+// #define USE_DEBUG_PORT 1
+// #define USE_SIGNAL 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -29,17 +31,93 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
-#include <linux/sched/signal.h>
 
 #include "omap_hwmod.h"
 
+#if defined USE_SIGNAL
+#include <linux/sched/signal.h>
 #define SIGNAL_SSI 60
+#endif
 
-#define LEW_MICROSECOND 500UL
+//==================================================================================================
 
-#define INTC_INTC_ILR0_BASE_REG 0x48200100
+#define IOCTL_FIP_SET_VARIABLES _IO('U', 0)
+#define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
+#define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
+#define IOCTL_SSI_TIMER_ENABLE _IO('U', 3)
+#define IOCTL_SSI_TIMER_DISABLE _IO('U', 4)
 
-extern struct class *class_find(const char *name);
+//==================================================================================================
+
+// IRQ treshold/prio control
+extern void omap_intc_set_irq_priority(u8 irq_number, u8 priority);
+extern void omap_intc_enable_low_prio_irqs(void);
+extern void omap_intc_disable_low_prio_irqs(void);
+
+extern void irq_control_timer_enable(void);
+extern void irq_control_timer_disable(void);
+
+#if defined(USE_DEBUG_PORT)
+// debug port
+extern void am335x_set_debug_port(u8 port_number, bool status);
+#endif
+
+//==================================================================================================
+struct SsiDeviceInfo {
+	dev_t device;
+	struct cdev driver_cdev;
+	struct class *dev_class;
+};
+
+//--------------------------------------------------------------------------------------------------
+struct SSiIoctlInfo {
+	unsigned long pid;
+	unsigned long ssi_output_delay_us;
+	void *instance_ptr;
+};
+
+//--------------------------------------------------------------------------------------------------
+struct SsiTimerData {
+	uint32_t timer_rate;
+	int32_t timer_irq;
+	struct omap_dm_timer clksrc;
+	unsigned long lew_rate;
+	int timer_hwirq_number;
+};
+
+//--------------------------------------------------------------------------------------------------
+#if defined USE_SIGNAL
+struct SSiUserSpaceApplicationInfo {
+	unsigned long pid;
+	void *instance_ptr;
+	struct kernel_siginfo signal_info;
+	struct task_struct *app_task;
+};
+#endif
+
+//--------------------------------------------------------------------------------------------------
+struct ssi_timer_device {
+	wait_queue_head_t wait_queue;
+	int wait_queue_flag;
+
+	bool enabled;
+	unsigned int ssi_output_delay_us;
+
+	struct SsiDeviceInfo ssi_device_info;
+	struct SsiTimerData ssi_timer_data;
+	
+#if defined USE_SIGNAL
+	struct SSiUserSpaceApplicationInfo ssi_us_app_info;
+#endif
+};
+
+// device data
+// TODO should not be static but some private data of the module/driver instance
+static struct ssi_timer_device *device;
+
+//==================================================================================================
+static irqreturn_t
+omap2_timer_interrupt(int irq, void *dev_id) USE_NON_OPTIMIZED_FUNCTION;
 
 static int ssi_open(struct inode *inode,
 		    struct file *file) USE_NON_OPTIMIZED_FUNCTION;
@@ -47,23 +125,39 @@ static int ssi_release(struct inode *inode,
 		       struct file *file) USE_NON_OPTIMIZED_FUNCTION;
 static long ssi_ioctl(struct file *file, unsigned int cmd,
 		      unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
+static ssize_t ssi_read(struct file *file, char __user *buf,
+				size_t count, loff_t *offset);
 
-//==================================================================================================
 int ssi_timer_init(void) USE_NON_OPTIMIZED_FUNCTION;
-int ssi_timer_start(unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
+int ssi_timer_start(void) USE_NON_OPTIMIZED_FUNCTION;
+
 static void
 ssi_timer_clocksource_init(int timer5_id, const char *fck_source,
 			   const char *property) USE_NON_OPTIMIZED_FUNCTION;
 static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
 				  const char *fck_source, const char *property,
 				  int posted) USE_NON_OPTIMIZED_FUNCTION;
-static irqreturn_t
-omap2_timer_interrupt(int irq, void *dev_id) USE_NON_OPTIMIZED_FUNCTION;
 
-#if defined(USE_DEBUG_PORT)
-static void timer_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
-static volatile int counter;
-#endif
+//==================================================================================================
+static struct clock_event_device clockevent_timer = {
+	//TODO check those values. is periodic fine/needed?
+	.features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC, 
+	.rating = 300,
+	.min_delta_ns = 1000,
+	.max_delta_ns = 2000000,
+};
+
+//--------------------------------------------------------------------------------------------------
+static const struct of_device_id ssi_timer_of_match[] = {
+	{ .compatible = "ti,am335x-ssi-timer" },
+};
+
+//--------------------------------------------------------------------------------------------------
+static struct irqaction omap2_timer_irq = {
+	.name = "SSI_timer",
+	.flags = __IRQF_TIMER | IRQF_NO_SUSPEND | IRQF_ONESHOT,
+	.handler = omap2_timer_interrupt,
+};
 
 //==================================================================================================
 static struct file_operations ssiops = {
@@ -71,35 +165,8 @@ static struct file_operations ssiops = {
 	.open = ssi_open,
 	.unlocked_ioctl = ssi_ioctl,
 	.release = ssi_release,
+	.read = ssi_read
 };
-
-//--------------------------------------------------------------------------------------------------
-struct SsiDeviceInfo {
-	dev_t device;
-	struct cdev driver_cdev;
-	struct class *dev_class;
-};
-//--------------------------------------------------------------------------------------------------
-struct SSiUserSpaceApplicationInfo {
-	unsigned long pid;
-	void *instance_ptr;
-	struct kernel_siginfo signal_info;
-	struct task_struct *app_task;
-};
-
-static struct SsiDeviceInfo ssi_device_info = {
-	.device = 0,
-	.dev_class = NULL,
-};
-
-//--------------------------------------------------------------------------------------------------
-static struct SSiUserSpaceApplicationInfo ssi_us_app_info = {
-	.pid = 0,
-	.instance_ptr = NULL,
-	.app_task = NULL,
-};
-
-//==================================================================================================
 
 /*******************************************************************************/ /*!
  * @brief  Open function that will be called when the device driver is opened.
@@ -122,73 +189,46 @@ static int ssi_open(struct inode *inode, struct file *file)
  ***********************************************************************************/
 static int ssi_release(struct inode *inode, struct file *file)
 {
-	ssi_us_app_info.app_task = NULL;
-	ssi_us_app_info.pid = 0;
-	ssi_us_app_info.instance_ptr = NULL;
+#if defined USE_SIGNAL
+	device->ssi_us_app_info.app_task = NULL;
+	device->ssi_us_app_info.pid = 0;
+	device->ssi_us_app_info.instance_ptr = NULL;
+#endif
+
+	device->enabled = false;
+	omap_intc_enable_low_prio_irqs();
+
+	irq_control_timer_disable();
+
 	return 0;
 }
 
-//==================================================================================================
-struct SsiTimerData {
-	uint32_t timer_rate;
-	int32_t timer_irq;
-	struct omap_dm_timer clksrc;
-	unsigned long lew_rate;
-	void __iomem *intc_ilr0_reg_mem;
-	int timer_hwirq_number;
-};
+/*******************************************************************************/ /*!
+ * @brief  
+ *
+ * @return 
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void init_userspace_data(struct SSiIoctlInfo *args)
+{
+#if defined USE_SIGNAL
+	memset(&device->ssi_us_app_info.signal_info, 0,
+	       sizeof(struct kernel_siginfo));
+	device->ssi_us_app_info.signal_info.si_signo = SIGNAL_SSI;
+	device->ssi_us_app_info.signal_info.si_code = SI_KERNEL;
 
-//--------------------------------------------------------------------------------------------------
-#if defined(USE_DEBUG_PORT)
-struct SsiDebugPort {
-	void __iomem *clear_reg_mem;
-	void __iomem *set_reg_mem;
-};
+	device->ssi_us_app_info.pid = args->pid;
+	device->ssi_us_app_info.instance_ptr = args->instance_ptr;
+	device->ssi_us_app_info.app_task =
+		pid_task(find_pid_ns(device->ssi_us_app_info.pid, &init_pid_ns),
+			 PIDTYPE_PID);
+	device->ssi_us_app_info.signal_info.si_int = (int)args->instance_ptr;
 #endif
 
-//--------------------------------------------------------------------------------------------------
-struct SSiIoctlInfo {
-	unsigned long pid;
-	void *instance_ptr;
-};
+	device->ssi_output_delay_us = args->ssi_output_delay_us;
+}
 
-//==================================================================================================
-static struct SsiTimerData ssi_timer_data = {
-	.timer_rate = 0,
-	.timer_irq = -1,
-	.lew_rate = 0,
-	.timer_hwirq_number = 0,
-};
-
-#if defined(USE_DEBUG_PORT)
-static struct SsiDebugPort ssi_debug_port = {
-	.clear_reg_mem = NULL,
-	.set_reg_mem = NULL,
-};
-#endif
-
-//features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC,
-
-//==================================================================================================
-static struct clock_event_device clockevent_timer = {
-	.features = CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC, //TODO check those values. is periodic fine/needed? also probably max_delta is too small...
-	.rating = 300,
-	.min_delta_ns = 1000,
-	.max_delta_ns = 500000,
-};
-
-//--------------------------------------------------------------------------------------------------
-static const struct of_device_id test_module_timer_of_match[] = {
-	{ .compatible = "ti,am335x-ssi-timer" },
-	{},
-};
-
-//--------------------------------------------------------------------------------------------------
-static struct irqaction omap2_timer_irq = {
-	.name = "SSI_timer",
-	.flags = __IRQF_TIMER | IRQF_NO_SUSPEND | IRQF_ONESHOT,
-	.handler = omap2_timer_interrupt,
-};
 
 /*******************************************************************************/ /*!
  * @brief  Ioctl function that will be called when the user space application
@@ -202,24 +242,74 @@ static long ssi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct SSiIoctlInfo args;
 
-	memset(&ssi_us_app_info.signal_info, 0, sizeof(struct kernel_siginfo));
-	ssi_us_app_info.signal_info.si_signo = SIGNAL_SSI;
-	ssi_us_app_info.signal_info.si_code = SI_KERNEL;
+	switch (cmd) {
+	case IOCTL_FIP_SET_VARIABLES:
+		if (copy_from_user(&args, (struct SSiIoctlInfo *)arg,
+				   sizeof(struct SSiIoctlInfo))) {
+			printk(KERN_INFO
+			       "ssi_ioctl: cannot copy user arguments");
+			return -EACCES;
+		}
+		init_userspace_data(&args);
+		break;
 
-	if (copy_from_user(&args, (struct SSiIoctlInfo *)arg,
-			   sizeof(struct SSiIoctlInfo))) {
-		printk(KERN_INFO "ssi_ioctl: cannot copy user arguments");
-		return -EACCES;
+	case IOCTL_FIP_ENABLE_FOREIGN_IRQ:		
+		omap_intc_enable_low_prio_irqs();
+		break;
+
+	case IOCTL_FIP_DISABLE_FOREIGN_IRQ:
+		omap_intc_disable_low_prio_irqs();
+		break;
+
+	case IOCTL_SSI_TIMER_ENABLE:
+		device->enabled = true;
+		irq_control_timer_enable();
+		break;
+
+	case IOCTL_SSI_TIMER_DISABLE:
+		device->enabled = false;
+		// enable IRQs to avoid deadlocks
+		// TODO also do this in device-close, etc... ?
+		omap_intc_enable_low_prio_irqs();
+
+		irq_control_timer_disable();
+		break;
+
+	default:
+		break;
 	}
-	ssi_us_app_info.pid = args.pid;
-	ssi_us_app_info.instance_ptr = args.instance_ptr;
-	ssi_us_app_info.app_task = pid_task(
-		find_pid_ns(ssi_us_app_info.pid, &init_pid_ns), PIDTYPE_PID);
-
-	ssi_us_app_info.signal_info.si_int = (int)args.instance_ptr;
 
 	return 0;
 }
+
+/*******************************************************************************/ /*!
+ * @brief  
+ *
+ * @return 
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static ssize_t ssi_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
+{
+	char dummy;
+
+    if(file->f_flags & O_NONBLOCK){
+		return -EAGAIN;
+	}
+
+	wait_event_interruptible(device->wait_queue, device->wait_queue_flag != 0);
+	device->wait_queue_flag = 0;
+
+	// send dummy byte to userspace
+	if(count == 1)
+	{
+		copy_to_user(buf, &dummy, 1);
+		return 1;
+	}	
+
+    return 0;
+}
+
 //==================================================================================================
 /*******************************************************************************/ /*!
  * @brief  ssi_timer_init function that will be called when the device driver is opened.
@@ -231,38 +321,38 @@ static long ssi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 int ssi_timer_init(void)
 {
 	ssi_timer_clocksource_init(4, "timer_sys_ck", "ti,timer-alwon");
-	ssi_timer_data.lew_rate = ((
+	device->ssi_timer_data.lew_rate = ((
 		unsigned long)(1000000000UL /
-			       ssi_timer_data.clksrc
+			       device->ssi_timer_data.clksrc
 				       .rate)); // 41 for ssi_timer_data.clksrc.rate==24MHz
 	/* Allocating Major number */
-	if ((alloc_chrdev_region(&ssi_device_info.device, 0, 1,
+	if ((alloc_chrdev_region(&device->ssi_device_info.device, 0, 1,
 				 "ssiTimer_Dev")) < 0) {
 		printk(KERN_INFO "Cannot allocate major number");
 		return -1;
 	}
 	printk(KERN_INFO "Major = %d Minor = %d \n",
-	       MAJOR(ssi_device_info.device), MINOR(ssi_device_info.device));
+	       MAJOR(device->ssi_device_info.device), MINOR(device->ssi_device_info.device));
 
 	/* creating cdev structure */
-	cdev_init(&ssi_device_info.driver_cdev, &ssiops);
+	cdev_init(&device->ssi_device_info.driver_cdev, &ssiops);
 
 	/* Adding character device to the system */
-	if ((cdev_add(&ssi_device_info.driver_cdev, ssi_device_info.device,
+	if ((cdev_add(&device->ssi_device_info.driver_cdev, device->ssi_device_info.device,
 		      1)) < 0) {
 		printk(KERN_INFO "Cannot add the device to the system");
 		goto r_class;
 	}
 
 	// /* Creating struct class */
-	if ((ssi_device_info.dev_class =
+	if ((device->ssi_device_info.dev_class =
 		     class_create(THIS_MODULE, "ssi_class")) == NULL) {
 		printk(KERN_INFO "Cannot create the struct class\n");
 		goto r_class;
 	}
 	/* Creating device */
-	if ((device_create(ssi_device_info.dev_class, NULL,
-			   ssi_device_info.device, NULL, "ssi_timer")) ==
+	if ((device_create(device->ssi_device_info.dev_class, NULL,
+			   device->ssi_device_info.device, NULL, "ssi_timer")) ==
 	    NULL) {
 		printk(KERN_INFO "Cannot create the Device 1\n");
 		goto r_device;
@@ -271,9 +361,9 @@ int ssi_timer_init(void)
 	return 0;
 
 r_device:
-	class_destroy(ssi_device_info.dev_class);
+	class_destroy(device->ssi_device_info.dev_class);
 r_class:
-	unregister_chrdev_region(ssi_device_info.device, 1);
+	unregister_chrdev_region(device->ssi_device_info.device, 1);
 	return -1;
 }
 EXPORT_SYMBOL_GPL(ssi_timer_init);
@@ -281,18 +371,22 @@ EXPORT_SYMBOL_GPL(ssi_timer_init);
 /*******************************************************************************/ /*!
  * @brief  ssi_timer_start function that will be start the timer.
  *
- * @arg arg : timer value
  * @return 0: success
  * @exception
  * @globals
  ***********************************************************************************/
-int ssi_timer_start(unsigned long arg)
+int ssi_timer_start(void)
 {
 	unsigned long cycles;
 
-	cycles = (unsigned int)((arg * 1000U) /
-				ssi_timer_data.lew_rate); // 12195 for 500us
-	__omap_dm_timer_load_start(&ssi_timer_data.clksrc, OMAP_TIMER_CTRL_ST,
+	if( !device->enabled )
+	{
+		return -1;
+	}
+
+	cycles = (unsigned int)((device->ssi_output_delay_us * 1000U) /
+				device->ssi_timer_data.lew_rate); // 12195 for 500us
+	__omap_dm_timer_load_start(&device->ssi_timer_data.clksrc, OMAP_TIMER_CTRL_ST,
 				   (unsigned int)(0xffffffffU - cycles),
 				   OMAP_TIMER_NONPOSTED);
 	return 0;
@@ -311,22 +405,22 @@ static void ssi_timer_clocksource_init(int timer5_id, const char *fck_source,
 {
 	int res;
 
-	ssi_timer_data.clksrc.id = timer5_id;
-	ssi_timer_data.clksrc.errata = OMAP_TIMER_ERRATA_I103_I767;
+	device->ssi_timer_data.clksrc.id = timer5_id;
+	device->ssi_timer_data.clksrc.errata = OMAP_TIMER_ERRATA_I103_I767;
 
-	res = omap_dm_ssi_timer_init(&ssi_timer_data.clksrc, fck_source,
+	res = omap_dm_ssi_timer_init(&device->ssi_timer_data.clksrc, fck_source,
 				     property, OMAP_TIMER_NONPOSTED);
 
-	omap2_timer_irq.dev_id = &ssi_timer_data.clksrc;
-	setup_irq(ssi_timer_data.clksrc.irq, &omap2_timer_irq);
+	omap2_timer_irq.dev_id = &device->ssi_timer_data.clksrc;
+	setup_irq(device->ssi_timer_data.clksrc.irq, &omap2_timer_irq);
 
-	__omap_dm_timer_int_enable(&ssi_timer_data.clksrc,
+	__omap_dm_timer_int_enable(&device->ssi_timer_data.clksrc,
 				   OMAP_TIMER_INT_OVERFLOW);
 
 	clockevent_timer.cpumask = cpu_possible_mask;
-	clockevent_timer.irq = omap_dm_timer_get_irq(&ssi_timer_data.clksrc);
+	clockevent_timer.irq = omap_dm_timer_get_irq(&device->ssi_timer_data.clksrc);
 	clockevents_config_and_register(
-		&clockevent_timer, ssi_timer_data.clksrc.rate,
+		&clockevent_timer, device->ssi_timer_data.clksrc.rate,
 		1000, /* Timer internal resynch latency */
 		500000);
 }
@@ -386,9 +480,8 @@ static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
 	struct device_node *np;
 	struct omap_hwmod *oh;
 	struct clk *src;
-	int timer_ilr0_base_reg;
 
-	np = omap_get_timer_dt(test_module_timer_of_match, property);
+	np = omap_get_timer_dt(ssi_timer_of_match, property);
 	if (!np) {
 		return -ENODEV;
 	}
@@ -403,7 +496,7 @@ static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
 	}
 
 	timer->irq = irq_of_parse_and_map(np, 0);
-	ssi_timer_data.timer_irq = timer->irq;
+	device->ssi_timer_data.timer_irq = timer->irq;
 	if (!timer->irq) {
 		return -ENXIO;
 	}
@@ -454,16 +547,14 @@ static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
 	}
 
 	timer->rate = clk_get_rate(timer->fclk);
-	ssi_timer_data.timer_rate = timer->rate;
+	device->ssi_timer_data.timer_rate = timer->rate;
 	timer->reserved = 1;
 
-	/* set threshold of timer interrupt */
+	/* set priority of timer interrupt */
 	of_property_read_s32(np, "interrupts",
-			     &ssi_timer_data.timer_hwirq_number);
-	timer_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
-			      (ssi_timer_data.timer_hwirq_number * 4);
-	ssi_timer_data.intc_ilr0_reg_mem = ioremap(timer_ilr0_base_reg, 4);
-	writel_relaxed(1U << 4, ssi_timer_data.intc_ilr0_reg_mem);
+			     &device->ssi_timer_data.timer_hwirq_number);
+	omap_intc_set_irq_priority(device->ssi_timer_data.timer_hwirq_number,
+				   0x04);
 
 	return 0;
 }
@@ -475,49 +566,58 @@ static int omap_dm_ssi_timer_init(struct omap_dm_timer *timer,
  * @exception
  * @globals
  ***********************************************************************************/
-
-
-
 static irqreturn_t omap2_timer_interrupt(int irq, void *dev_id)
 {
-	__omap_dm_timer_write_status(&ssi_timer_data.clksrc,
+	__omap_dm_timer_write_status(&device->ssi_timer_data.clksrc,
 				     OMAP_TIMER_INT_OVERFLOW);
-	if (ssi_us_app_info.app_task != NULL) {
+
+	if( !device->enabled )
+	{
+		// timer was already disabled
+		return IRQ_NONE;
+	}	
+
 #if defined(USE_DEBUG_PORT)
-		timer_set_debug_port(true);
-		for (counter = 0; counter < 2000; counter++) {
-			/* code */
-		}
-		timer_set_debug_port(false);
+	am335x_set_debug_port(8, false);
 #endif
-		if (send_sig_info(SIGNAL_SSI, &ssi_us_app_info.signal_info,
-				  ssi_us_app_info.app_task) < 0) {
+
+	device->wait_queue_flag = 1 ;
+	wake_up_interruptible(&(device->wait_queue));
+
+#if defined USE_SIGNAL
+	if (device->ssi_us_app_info.app_task != NULL) {
+		if (send_sig_info(SIGNAL_SSI, &device->ssi_us_app_info.signal_info,
+				  device->ssi_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "SSI, omap2_timer_interrupt : cannot send signal\n");
 		}
-		return IRQ_HANDLED;
 	}
+#endif
+
+#if defined(USE_DEBUG_PORT)
+	am335x_set_debug_port(8, true);
+#endif
+
 	return IRQ_HANDLED;
 }
 
-#if defined(USE_DEBUG_PORT)
 /*******************************************************************************/ /*!
- * @brief  Sets the status of the debug port.
+ * @brief  
  *
- * @param status: true = set the port ; false = clear the port
- * @return
+ * @return 
  * @exception
  * @globals
  ***********************************************************************************/
-static void timer_set_debug_port(bool status)
+static void init_dev_data(struct ssi_timer_device *dev)
 {
-	if (status) {
-		writel_relaxed(1U << 15, ssi_debug_port.set_reg_mem);
-	} else {
-		writel_relaxed(1U << 15, ssi_debug_port.clear_reg_mem);
-	}
+	init_waitqueue_head(&(dev->wait_queue));
+
+	dev->enabled = false;
+	
+	dev->ssi_output_delay_us = 400; //us
+
+	dev->ssi_timer_data.timer_irq = -1;
 }
-#endif
 
 /*******************************************************************************/ /*!
  * @brief  Kernel module initialization function for the device driver.
@@ -528,11 +628,16 @@ static void timer_set_debug_port(bool status)
  ***********************************************************************************/
 static int __init ssi_timer_module_init(void)
 {
-#if defined(USE_DEBUG_PORT)
-	/* debug port settings */
-	ssi_debug_port.clear_reg_mem = ioremap(0x481AE190, 4);
-	ssi_debug_port.set_reg_mem = ioremap(0x481AE194, 4);
-#endif
+	// init global device data
+	device = NULL;
+
+	device = kzalloc(sizeof(struct ssi_timer_device), GFP_KERNEL);
+	if (device == NULL) {
+		return -ENOMEM;
+	}
+
+	init_dev_data(device);
+
 	return 0;
 }
 
@@ -546,21 +651,22 @@ static int __init ssi_timer_module_init(void)
 static void __exit ssi_timer_module_exit(void)
 {
 	/* stop the timer */
-	__omap_dm_timer_stop(&ssi_timer_data.clksrc, OMAP_TIMER_POSTED,
-			     ssi_timer_data.clksrc.rate);
+	__omap_dm_timer_stop(&device->ssi_timer_data.clksrc, OMAP_TIMER_POSTED,
+			     device->ssi_timer_data.clksrc.rate);
 	/* Release the IRQ handler */
-	remove_irq(ssi_timer_data.timer_irq, &omap2_timer_irq);
+	remove_irq(device->ssi_timer_data.timer_irq, &omap2_timer_irq);
 
 	/* Release the timer */
 	//ret = omap_dm_timer_free(&ssi_timer_data.clksrc);
-	device_destroy(ssi_device_info.dev_class, ssi_device_info.device);
-	class_destroy(ssi_device_info.dev_class);
-	cdev_del(&ssi_device_info.driver_cdev);
-	unregister_chrdev_region(ssi_device_info.device, 1);
+	device_destroy(device->ssi_device_info.dev_class, device->ssi_device_info.device);
+	class_destroy(device->ssi_device_info.dev_class);
+	cdev_del(&device->ssi_device_info.driver_cdev);
+	unregister_chrdev_region(device->ssi_device_info.device, 1);
 
 	printk(KERN_INFO "Device Driver Remove...Done!!!\n");
 }
 
+//==================================================================================================
 module_init(ssi_timer_module_init);
 module_exit(ssi_timer_module_exit);
 
