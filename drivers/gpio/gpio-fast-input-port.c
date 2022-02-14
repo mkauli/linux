@@ -8,6 +8,7 @@
  * Copyright (C) 2020 Martin Kaul <private>
  * Reformat & enhanced by Martin Kaul <martin@familie-kaul.de>
  */
+
 // #define ENABLE_DEBUGGING 1
 #if defined(ENABLE_DEBUGGING)
 #	define USE_NON_OPTIMIZED_FUNCTION __attribute__((optimize("-Og")))
@@ -19,6 +20,7 @@
 
 // #define MONITOR_TIME_DIFFERENCE 1
 // #define USE_DEBUG_PORT 1
+// #define USE_SIGNAL 1
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -26,29 +28,44 @@
 #include <linux/interrupt.h>
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
+#if defined USE_SIGNAL
 #include <linux/sched/signal.h>
+#endif
+
+//==================================================================================================
 
 #define IOCTL_FIP_SET_VARIABLES _IO('U', 0)
 #define IOCTL_FIP_ENABLE_FOREIGN_IRQ _IO('U', 1)
 #define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
 
-#define START_ADDR 0x48200288
-#define INTC_INTC_ILR0_BASE_REG 0x48200100
-
-#define INCT_CONTROL_BASE 0x48200000
-#define INTC_THRESHOLD 0x0068
-
-extern struct class *class_find(const char *name);
+//==================================================================================================
 
 // ssi timer
 extern int ssi_timer_init(void);
-extern int ssi_timer_start(unsigned long arg);
+extern int ssi_timer_start(void);
+
+// IRQ treshold/prio control
+extern void omap_intc_set_irq_priority(u8 irq_number, u8 priority);
+extern void omap_intc_enable_low_prio_irqs(void);
+extern void omap_intc_disable_low_prio_irqs(void);
+
+// IRQ control timer
+extern void irq_control_timer_init(void);
+extern void irq_control_timer_start(unsigned int time_us, unsigned int reload_time_us);
+extern void irq_control_timer_stop(void);
+
+#if defined(USE_DEBUG_PORT)
+// debug port
+extern void am335x_set_debug_port(u8 port_number, bool status); // use port_number 8
+#endif
+
+// ToDo: check if this is neccessary
+extern ktime_t tick_period;
 
 //==================================================================================================
 struct FipGpioData {
 	unsigned int gpio_id;
 	unsigned int irq_number;
-	void __iomem *intc_ilr0_reg_mem;
 	struct gpio_desc *gpio;
 	struct irq_data *irq;
 	struct irq_desc *irqd;
@@ -64,24 +81,28 @@ struct FipDeviceInfo {
 };
 
 //--------------------------------------------------------------------------------------------------
+struct FipIoctlInfo {
+	unsigned long pid;
+	unsigned long irq_disable_time_1_us;
+	unsigned long irq_disable_time_2_us;
+	void *instance_ptr;
+};
+
+//--------------------------------------------------------------------------------------------------
+struct FipInterruptData {
+	unsigned long irq_disable_time_1_us;
+	unsigned long irq_disable_time_2_us;
+};
+
+//--------------------------------------------------------------------------------------------------
+#if defined USE_SIGNAL
 struct FipUserSpaceApplicationInfo {
 	unsigned long pid;
 	void *instance_ptr;
 	struct kernel_siginfo signal_info;
 	struct task_struct *app_task;
 };
-
-//--------------------------------------------------------------------------------------------------
-struct FipIoctlInfo {
-	unsigned long pid;
-	void *instance_ptr;
-};
-
-//--------------------------------------------------------------------------------------------------
-struct FipInterruptData {
-	void __iomem *intc_threshold_reg;
-	bool interrupt_enabled;
-};
+#endif
 
 //--------------------------------------------------------------------------------------------------
 #if defined(MONITOR_TIME_DIFFERENCE)
@@ -95,75 +116,39 @@ struct FipSystemTimerData {
 #endif
 
 //--------------------------------------------------------------------------------------------------
-#if defined(USE_DEBUG_PORT)
-struct FipDebugPort {
-	void __iomem *clear_reg_mem;
-	void __iomem *set_reg_mem;
-};
+struct fip_device {
+	wait_queue_head_t wait_queue;
+	int wait_queue_flag;
+
+	struct FipGpioData fip_gpio_data;
+	struct FipDeviceInfo fip_device_info;
+	struct FipInterruptData fip_irq_data;
+
+#if defined USE_SIGNAL
+	struct FipUserSpaceApplicationInfo fip_us_app_info;
 #endif
-
-//==================================================================================================
-static struct FipGpioData fip_gpio_data = {
-	.gpio_id = CONFIG_GPIO_FAST_INPUT_PORT_ID,
-	.irq_number = 0,
-	.intc_ilr0_reg_mem = NULL,
-	.gpio = NULL,
-	.irq = NULL,
-	.irqd = NULL,
-	.parent_irqd = NULL,
-	.gpio_bank_hwirq_number = 0,
-};
-
-static struct FipDeviceInfo fip_device_info = {
-	.device = 0,
-	.dev_class = NULL,
-};
-
-static struct FipUserSpaceApplicationInfo fip_us_app_info = {
-	.pid = 0,
-	.instance_ptr = NULL,
-	.app_task = NULL,
-};
-
-static struct FipInterruptData fip_irq_data = {
-	.intc_threshold_reg = NULL,
-	.interrupt_enabled = true,
-};
 
 #if defined(MONITOR_TIME_DIFFERENCE)
-static struct FipSystemTimerData fip_system_timer_data = {
-	.system_timer_reg = NULL,
-	.init_counter = 20,
-	.max_time_value = 0,
-	.min_time_value = 0xFFFFFFFF,
-	.last_time_value = 0,
-};
+	struct FipSystemTimerData fip_system_timer_data;
 #endif
+};	
 
-#if defined(USE_DEBUG_PORT)
-struct FipDebugPort fip_debug_port = {
-	.clear_reg_mem = NULL,
-	.set_reg_mem = NULL,
-};
-#endif
-
-// ToDo: check if this is neccessary
-extern ktime_t tick_period;
+// device data
+// TODO should not be static but some private data of the module/driver instance
+static struct fip_device *device;
 
 //==================================================================================================
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs) USE_NON_OPTIMIZED_FUNCTION;
-static int fip_open(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
-static int fip_release(struct inode *inode, struct file *file) USE_NON_OPTIMIZED_FUNCTION;
-static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
 
-void fip_enable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
-void fip_disable_foreign_irq(void) USE_NON_OPTIMIZED_FUNCTION;
-
-#if defined(USE_DEBUG_PORT)
-static void fip_set_debug_port(bool status) USE_NON_OPTIMIZED_FUNCTION;
-volatile int counter;
-#endif
+static int fip_open(struct inode *inode,
+		    struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static int fip_release(struct inode *inode,
+		       struct file *file) USE_NON_OPTIMIZED_FUNCTION;
+static long fip_ioctl(struct file *file, unsigned int cmd,
+		      unsigned long arg) USE_NON_OPTIMIZED_FUNCTION;
+static ssize_t fip_read(struct file *file, char __user *buf, size_t count,
+			loff_t *offset);
 
 //==================================================================================================
 static struct file_operations fops = {
@@ -171,9 +156,8 @@ static struct file_operations fops = {
 	.open = fip_open,
 	.unlocked_ioctl = fip_ioctl,
 	.release = fip_release,
+	.read = fip_read
 };
-
-//==================================================================================================
 
 /*******************************************************************************/ /*!
  * @brief  Open function that will be called when the device driver is opened.
@@ -184,6 +168,8 @@ static struct file_operations fops = {
  ***********************************************************************************/
 static int fip_open(struct inode *inode, struct file *file)
 {
+	device->wait_queue_flag = 0;
+
 	return 0;
 }
 
@@ -196,17 +182,50 @@ static int fip_open(struct inode *inode, struct file *file)
  ***********************************************************************************/
 static int fip_release(struct inode *inode, struct file *file)
 {
-	fip_us_app_info.app_task = NULL;
-	fip_us_app_info.pid = 0;
-	fip_us_app_info.instance_ptr = NULL;
+#if defined USE_SIGNAL
+	device->fip_us_app_info.app_task = NULL;
+	device->fip_us_app_info.pid = 0;
+	device->fip_us_app_info.instance_ptr = NULL;
+#endif
+	
+	// TODO required?
 	tick_period = 1000000; //reset period to 1 ms
 
 #if defined(MONITOR_TIME_DIFFERENCE)
-	fip_system_timer_data.init_counter = 20;
+	device->fip_system_timer_data.init_counter = 100;
 #endif
 
 	return 0;
 }
+
+/*******************************************************************************/ /*!
+ * @brief  
+ *
+ * @return 
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static void init_userspace_data(struct FipIoctlInfo *args)
+{
+#if defined USE_SIGNAL
+	memset(&device->fip_us_app_info.signal_info, 0,
+	       sizeof(struct kernel_siginfo));
+	device->fip_us_app_info.signal_info.si_signo =
+		CONFIG_GPIO_FAST_INPUT_PORT_SIGNO;
+	device->fip_us_app_info.signal_info.si_code = SI_KERNEL;
+
+	device->fip_us_app_info.pid = args->pid;
+	device->fip_us_app_info.instance_ptr = args->instance_ptr;
+	device->fip_us_app_info.app_task =
+		pid_task(find_pid_ns(device->fip_us_app_info.pid, &init_pid_ns),
+			 PIDTYPE_PID);
+	device->fip_us_app_info.signal_info.si_int = (int)args->instance_ptr;
+#endif
+
+	device->fip_irq_data.irq_disable_time_1_us = args->irq_disable_time_1_us;
+	device->fip_irq_data.irq_disable_time_2_us = args->irq_disable_time_2_us;
+}
+
 
 /*******************************************************************************/ /*!
  * @brief  Ioctl function that will be called when the user space application
@@ -222,32 +241,21 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case IOCTL_FIP_SET_VARIABLES:
-		memset(&fip_us_app_info.signal_info, 0,
-		       sizeof(struct kernel_siginfo));
-		fip_us_app_info.signal_info.si_signo = CONFIG_GPIO_FAST_INPUT_PORT_SIGNO;
-		fip_us_app_info.signal_info.si_code = SI_KERNEL;
-
 		if (copy_from_user(&args, (struct FipIoctlInfo *)arg,
 				   sizeof(struct FipIoctlInfo))) {
 			printk(KERN_INFO
 			       "fip_ioctl: cannot copy user arguments");
 			return -EACCES;
 		}
-		fip_us_app_info.pid = args.pid;
-		fip_us_app_info.instance_ptr = args.instance_ptr;
-		fip_us_app_info.app_task =
-			pid_task(find_pid_ns(fip_us_app_info.pid, &init_pid_ns),
-				 PIDTYPE_PID);
-
-		fip_us_app_info.signal_info.si_int = (int)args.instance_ptr;
+		init_userspace_data(&args);
 		break;
 
 	case IOCTL_FIP_ENABLE_FOREIGN_IRQ:
-		fip_enable_foreign_irq();
+		omap_intc_enable_low_prio_irqs();
 		break;
 
 	case IOCTL_FIP_DISABLE_FOREIGN_IRQ:
-		fip_disable_foreign_irq();
+		omap_intc_disable_low_prio_irqs();
 		break;
 
 	default:
@@ -255,6 +263,34 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 
 	return 0;
+}
+
+/*******************************************************************************/ /*!
+ * @brief  
+ *
+ * @return 
+ * @exception
+ * @globals
+ ***********************************************************************************/
+static ssize_t fip_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
+{
+	char dummy;
+
+    if(file->f_flags & O_NONBLOCK){
+		return -EAGAIN;
+	}
+
+	wait_event_interruptible(device->wait_queue, device->wait_queue_flag != 0);
+	device->wait_queue_flag = 0;
+
+	// return a dummy byte to userspace
+	if(count == 1)
+	{
+		copy_to_user(buf, &dummy, 1);
+		return 1;
+	}
+
+    return 0;
 }
 
 /*******************************************************************************/ /*!
@@ -268,109 +304,116 @@ static long fip_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static irq_handler_t fip_irq_handler(unsigned int irq, void *dev_id,
 				     struct pt_regs *regs)
 {
-	ssi_timer_start(500); // start SSI timer for 500µs
+	// disable low-prio IRQs after 300us (approx. 100us before SSI timer expires ),
+	// then disable low-prio IRQs again after another 1300us (right before next sync input edge)
+	// actual time values are set from userspace via IOCTL
+	irq_control_timer_start( device->fip_irq_data.irq_disable_time_1_us, device->fip_irq_data.irq_disable_time_2_us );
+
+
+	// try to start SSI timer, actual start will only take place if it is enabled
+	ssi_timer_start();
 	
+	// TODO this is probably not required on every invocation
+	omap_intc_set_irq_priority(device->fip_gpio_data.gpio_bank_hwirq_number, 0x04);
+
 #if defined(MONITOR_TIME_DIFFERENCE)
 	unsigned int time_value = readl_relaxed(fip_system_timer_data.system_timer_reg);
 	unsigned int time_difference;
-#endif
 
-	writel_relaxed(1U << 4, fip_gpio_data.intc_ilr0_reg_mem);
-
-	if (fip_us_app_info.app_task != NULL) {
-
-#if defined(MONITOR_TIME_DIFFERENCE)
-		if(!fip_irq_data.interrupt_enabled) {
-			if(fip_system_timer_data.init_counter > 0) {
-				fip_system_timer_data.last_time_value = time_value;
-				fip_system_timer_data.init_counter--;
-				fip_system_timer_data.max_time_value = 0;
-				fip_system_timer_data.min_time_value = 0xFFFFFFFF;
-			}
-			else {
-				time_difference = (time_value - fip_system_timer_data.last_time_value);
-				if(time_difference > fip_system_timer_data.max_time_value) {
-					fip_system_timer_data.max_time_value = time_difference;
-				}
-				if(time_difference < fip_system_timer_data.min_time_value) {
-					fip_system_timer_data.min_time_value = time_difference;
-				}
-				fip_system_timer_data.last_time_value = time_value;
-			}
-
-			if(fip_system_timer_data.max_time_value > (9600000+8400)) {
-				static int counter = 0;
-				counter++;
-			}
+	if(!fip_irq_data.interrupt_enabled) {
+		if(fip_system_timer_data.init_counter > 0) {
+			fip_system_timer_data.last_time_value = time_value;
+			fip_system_timer_data.init_counter--;
+			fip_system_timer_data.max_time_value = 0;
+			fip_system_timer_data.min_time_value = 0xFFFFFFFF;
 		}
+		else {
+			time_difference = (time_value - fip_system_timer_data.last_time_value);
+			if(time_difference > fip_system_timer_data.max_time_value) {
+				fip_system_timer_data.max_time_value = time_difference;
+			}
+			if(time_difference < fip_system_timer_data.min_time_value) {
+				fip_system_timer_data.min_time_value = time_difference;
+			}
+			fip_system_timer_data.last_time_value = time_value;
+		}
+
+		if(fip_system_timer_data.max_time_value > (9600000+8400)) {
+			static int counter = 0;
+			counter++;
+		}
+	}
 #endif
 
-#if defined(USE_DEBUG_PORT)
-		fip_set_debug_port(true);
-#endif
-
-		if (send_sig_info(CONFIG_GPIO_FAST_INPUT_PORT_SIGNO, &fip_us_app_info.signal_info,
+#if defined USE_SIGNAL
+	if (fip_us_app_info.app_task != NULL)
+	{
+		if (send_sig_info(CONFIG_GPIO_FAST_INPUT_PORT_SIGNO,
+				  &fip_us_app_info.signal_info,
 				  fip_us_app_info.app_task) < 0) {
 			printk(KERN_INFO
 			       "fip_irq_handler: cannot send signal\n");
 		}
-
-#if defined(USE_DEBUG_PORT)
-		fip_set_debug_port(false);
+	}
 #endif
 
-		return (irq_handler_t)IRQ_HANDLED;
-	}
+	device->wait_queue_flag = 1 ;
+	wake_up_interruptible(&device->wait_queue);
 
-	return (irq_handler_t)IRQ_NONE;
+	return (irq_handler_t)IRQ_HANDLED;
 }
 
 /*******************************************************************************/ /*!
- * @brief  Enables interrupt handling of other interrupts than the FIP irqs.
+ * @brief  
  *
- * @return
+ * @return 
  * @exception
  * @globals
  ***********************************************************************************/
-void fip_enable_foreign_irq(void)
+static void init_dev_data(struct fip_device *dev)
 {
-	writel_relaxed(0xFF, fip_irq_data.intc_threshold_reg);
-	fip_irq_data.interrupt_enabled = true;
+	init_waitqueue_head(&(dev->wait_queue));
+
+	dev->fip_gpio_data.gpio_id = CONFIG_GPIO_FAST_INPUT_PORT_ID;
+
+	dev->fip_irq_data.irq_disable_time_1_us = 300;
+	dev->fip_irq_data.irq_disable_time_2_us = 1300;
+
+	#if defined(MONITOR_TIME_DIFFERENCE)
+	dev->fip_system_timer_data.init_counter = 100;
+	dev->fip_system_timer_data.min_time_value = 0xFFFFFFFF;
+	#endif
 }
-EXPORT_SYMBOL_GPL(fip_enable_foreign_irq);
 
 /*******************************************************************************/ /*!
- * @brief  Disables interrupt handling of other interrupts than the FIP irqs.
+ * @brief  
  *
- * @return
+ * @return 
  * @exception
  * @globals
  ***********************************************************************************/
-void fip_disable_foreign_irq(void)
+static void init_gpio(struct fip_device *dev)
 {
-	writel_relaxed(0x05, fip_irq_data.intc_threshold_reg);
-	fip_irq_data.interrupt_enabled = false;
-}
-EXPORT_SYMBOL_GPL(fip_disable_foreign_irq);
+	/* Setup the requested GPIO-ID */
+	gpio_request(dev->fip_gpio_data.gpio_id, "sysfs");
+	gpio_direction_input(dev->fip_gpio_data.gpio_id);
+	gpio_export(dev->fip_gpio_data.gpio_id, false);
 
-#if defined(USE_DEBUG_PORT)
-/*******************************************************************************/ /*!
- * @brief  Sets the status of the debug port.
- *
- * @param status: true = set the port ; false = clear the port
- * @return
- * @exception
- * @globals
- ***********************************************************************************/
-static void fip_set_debug_port(bool status)
-{
-	if (status) {
-		writel_relaxed(1U << 8, fip_debug_port.set_reg_mem);
-	} else {
-		writel_relaxed(1U << 8, fip_debug_port.clear_reg_mem);
-	}
+	dev->fip_gpio_data.irq_number = gpio_to_irq(dev->fip_gpio_data.gpio_id);
+	dev->fip_gpio_data.gpio = gpio_to_desc(dev->fip_gpio_data.gpio_id);
+	dev->fip_gpio_data.irq = irq_get_irq_data(dev->fip_gpio_data.irq_number);
+	dev->fip_gpio_data.irqd = irq_to_desc(dev->fip_gpio_data.irq_number);
+	dev->fip_gpio_data.parent_irqd = irq_to_desc(dev->fip_gpio_data.irqd->parent_irq);
+	dev->fip_gpio_data.gpio_bank_hwirq_number = dev->fip_gpio_data.parent_irqd->irq_data.hwirq;
 }
+
+static void init_regs(struct fip_device *dev)
+{
+#if defined(MONITOR_TIME_DIFFERENCE)
+	dev->fip_system_timer_data.system_timer_reg = ioremap(0x44E31028, 4);
 #endif
+}
+
 
 /*******************************************************************************/ /*!
  * @brief  Kernel module initialization function for the module fast_input_port.
@@ -381,91 +424,82 @@ static void fip_set_debug_port(bool status)
  ***********************************************************************************/
 static int __init fast_input_port_init(void)
 {
-	int gpio_bank_ilr0_base_reg;
+	// init global device data
+	device = NULL;
 
-	/* Setup the memory accesses of the AMS335x interrupt intc registers */
-	fip_irq_data.intc_threshold_reg =
-		ioremap(INCT_CONTROL_BASE + INTC_THRESHOLD, 4);
+	device = kzalloc(sizeof(struct fip_device), GFP_KERNEL);
+	if (device == NULL) {
+		return -ENOMEM;
+	}
 
-	/* Setup the requested GPIO-ID */
-	gpio_request(fip_gpio_data.gpio_id, "sysfs");
-	gpio_direction_input(fip_gpio_data.gpio_id);
-	gpio_export(fip_gpio_data.gpio_id, false);
+	init_dev_data(device);
 
+	init_gpio(device);
 
-	fip_gpio_data.irq_number = gpio_to_irq(fip_gpio_data.gpio_id);
-	fip_gpio_data.gpio = gpio_to_desc(fip_gpio_data.gpio_id);
-	fip_gpio_data.irq = irq_get_irq_data(fip_gpio_data.irq_number);
-	fip_gpio_data.irqd = irq_to_desc(fip_gpio_data.irq_number);
-	fip_gpio_data.parent_irqd = irq_to_desc(fip_gpio_data.irqd->parent_irq);
-	fip_gpio_data.gpio_bank_hwirq_number =
-		fip_gpio_data.parent_irqd->irq_data.hwirq;
-	gpio_bank_ilr0_base_reg = INTC_INTC_ILR0_BASE_REG +
-				  (fip_gpio_data.gpio_bank_hwirq_number * 4);
+	init_regs(device);
 
-	/* Allocating Major number */
-	if ((alloc_chrdev_region(&fip_device_info.device, 0, 1,
+	/* allocate major number */
+	if ((alloc_chrdev_region(&device->fip_device_info.device, 0, 1,
 				 "fastinputport_Dev")) < 0) {
 		printk(KERN_INFO "Cannot allocate major number");
 		return -1;
 	}
 	printk(KERN_INFO "Major = %d Minor = %d \n",
-	       MAJOR(fip_device_info.device), MINOR(fip_device_info.device));
+	       MAJOR(device->fip_device_info.device), MINOR(device->fip_device_info.device));
 
-	/* creating cdev structure */
-	cdev_init(&fip_device_info.driver_cdev, &fops);
+	/* create cdev structure */
+	cdev_init(&device->fip_device_info.driver_cdev, &fops);
 
-	/* Adding character device to the system */
-	if ((cdev_add(&fip_device_info.driver_cdev, fip_device_info.device,
+	/* Add character device to the system */
+	if ((cdev_add(&device->fip_device_info.driver_cdev, device->fip_device_info.device,
 		      1)) < 0) {
 		printk(KERN_INFO "Cannot add the device to the system");
 		goto r_class;
 	}
 
-	// /* Creating struct class */
-	if ((fip_device_info.dev_class =
+	/* create struct class */
+	if ((device->fip_device_info.dev_class =
 		     class_create(THIS_MODULE, "fip_class")) == NULL) {
 		printk(KERN_INFO "Cannot create the struct class\n");
 		goto r_class;
 	}
-	/* Creating device */
-	if ((device_create(fip_device_info.dev_class, NULL,
-			   fip_device_info.device, NULL, "fip_input")) ==
+
+
+	/* create device */
+	//			   fip_device_info.device, NULL, "fip_input-%d", CONFIG_GPIO_FAST_INPUT_PORT_ID)) ==
+	if ((device_create(device->fip_device_info.dev_class, NULL,
+			   device->fip_device_info.device, NULL, "fip_input")) ==
 	    NULL) {
 		printk(KERN_INFO "Cannot create the Device 1\n");
 		goto r_device;
 	}
 
-	fip_gpio_data.intc_ilr0_reg_mem = ioremap(gpio_bank_ilr0_base_reg, 4);
-	if ((request_threaded_irq(fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
-				  NULL,
-//				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_THREAD,
-				  IRQF_TRIGGER_FALLING | IRQF_NOBALANCING | IRQF_NO_SUSPEND,
-				  "fip_input", NULL))) {
+	if ((request_irq(device->fip_gpio_data.irq_number, (irq_handler_t)fip_irq_handler,
+#if defined USE_SIGNAL
+			// sending signal will not work in hard-irq
+			IRQF_TRIGGER_FALLING | IRQF_NOBALANCING | IRQF_NO_SUSPEND,
+#else
+			IRQF_TRIGGER_FALLING | IRQF_NOBALANCING | IRQF_NO_SUSPEND | IRQF_NO_THREAD,
+#endif
+			 "fip_input", NULL))) {
 		printk(KERN_INFO "cannot register IRQ");
 		goto irq;
 	}
-	ssi_timer_init(); //init ssi timer
 
-#if defined(MONITOR_TIME_DIFFERENCE)
-	/* system timer settings. */
-	fip_system_timer_data.system_timer_reg = ioremap(0x44E31028, 4);
-#endif
+	//init ssi timer
+	ssi_timer_init();
 
-#if defined(USE_DEBUG_PORT)
-	/* debug port settings */
-	fip_debug_port.clear_reg_mem = ioremap(0x481AE190, 4);
-	fip_debug_port.set_reg_mem = ioremap(0x481AE194, 4);
-#endif
+	// init IRQ control timer
+	irq_control_timer_init();
 
 	return 0;
 
 irq:
-	free_irq(fip_gpio_data.irq_number, NULL);
+	free_irq(device->fip_gpio_data.irq_number, NULL);
 r_device:
-	class_destroy(fip_device_info.dev_class);
+	class_destroy(device->fip_device_info.dev_class);
 r_class:
-	unregister_chrdev_region(fip_device_info.device, 1);
+	unregister_chrdev_region(device->fip_device_info.device, 1);	
 	return -1;
 }
 
@@ -478,13 +512,13 @@ r_class:
  ***********************************************************************************/
 static void __exit fast_input_port_exit(void)
 {
-	free_irq(fip_gpio_data.irq_number, NULL);
-	gpio_unexport(fip_gpio_data.gpio_id);
-	gpio_free(fip_gpio_data.gpio_id);
-	device_destroy(fip_device_info.dev_class, fip_device_info.device);
-	class_destroy(fip_device_info.dev_class);
-	cdev_del(&fip_device_info.driver_cdev);
-	unregister_chrdev_region(fip_device_info.device, 1);
+	free_irq(device->fip_gpio_data.irq_number, NULL);
+	gpio_unexport(device->fip_gpio_data.gpio_id);
+	gpio_free(device->fip_gpio_data.gpio_id);
+	device_destroy(device->fip_device_info.dev_class, device->fip_device_info.device);
+	class_destroy(device->fip_device_info.dev_class);
+	cdev_del(&device->fip_device_info.driver_cdev);
+	unregister_chrdev_region(device->fip_device_info.device, 1);
 	printk(KERN_INFO "Device Driver Remove...Done!!!\n");
 }
 
