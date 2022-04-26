@@ -46,6 +46,8 @@
 #define IOCTL_FIP_DISABLE_FOREIGN_IRQ _IO('U', 2)
 #define IOCTL_SSI_TIMER_ENABLE _IO('U', 3)
 #define IOCTL_SSI_TIMER_DISABLE _IO('U', 4)
+#define IOCTL_IRQ_TIMER_ENABLE _IO('U', 5)
+#define IOCTL_IRQ_TIMER_DISABLE _IO('U', 6)
 
 //==================================================================================================
 
@@ -263,7 +265,6 @@ static long ssi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case IOCTL_SSI_TIMER_ENABLE:
 		device->enabled = true;
-		irq_control_timer_enable();
 		break;
 
 	case IOCTL_SSI_TIMER_DISABLE:
@@ -271,8 +272,15 @@ static long ssi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		// enable IRQs to avoid deadlocks
 		// TODO also do this in device-close, etc... ?
 		omap_intc_enable_low_prio_irqs();
+		break;
 
+	case IOCTL_IRQ_TIMER_ENABLE:
+		irq_control_timer_enable();
+		break;
+
+	case IOCTL_IRQ_TIMER_DISABLE:
 		irq_control_timer_disable();
+		omap_intc_enable_low_prio_irqs();
 		break;
 
 	default:
