@@ -2017,8 +2017,10 @@ static int omap_nand_attach_chip(struct nand_chip *chip)
 	 * ooblayout instead of using ours.
 	 */
 	if (info->ecc_opt == OMAP_ECC_HAM1_CODE_SW) {
-		chip->ecc.mode = NAND_ECC_SOFT;
-		chip->ecc.algo = NAND_ECC_HAMMING;
+		/* ??PATCH bkana@leuze.com 2022-04-12 */	
+		//chip->ecc.mode = NAND_ECC_SOFT;
+		//chip->ecc.algo = NAND_ECC_HAMMING;
+		chip->ecc.mode = NAND_ECC_ON_DIE;
 		return 0;
 	}
 	/* ??PATCH bkana@leuze.com 2020-04-15 */

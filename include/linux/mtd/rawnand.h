@@ -92,6 +92,7 @@ typedef enum {
 	NAND_ECC_ON_DIE,
 	/* ??PATCH bkana@leuze.com 2020-04-15 */
 	OMAP_ECC_NONE,
+	NAND_ECC_BENAND,
 } nand_ecc_modes_t;
 
 enum nand_ecc_algo {

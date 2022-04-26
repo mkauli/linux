@@ -36,6 +36,8 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/mtd/nand_bch.h>
+/* ??PATCH bkana@leuze.com 2022-04-11 */
+#include <linux/mtd/nand_benand.h>
 #include <linux/interrupt.h>
 #include <linux/bitops.h>
 #include <linux/io.h>
@@ -44,6 +46,26 @@
 #include <linux/gpio/consumer.h>
 
 #include "internals.h"
+
+
+/* ??PATCH bkana@leuze.com 2022-04-04 */
+#define TC58_ECC_READ_STATUS		0x7a
+#define TC58_STATUS_READ			0x70
+#define TC58_READ					0x00
+
+/* ??PATCH bkana@leuze.com 2022-04-04 */
+//#define DEBUGGING 1
+
+/* ??PATCH bkana@leuze.com 2022-04-04 */
+#ifdef DEBUGGING
+#pragma GCC optimize ("O0")
+#define NAND_SIMULATION 1
+static unsigned int simulate_error_offset = 0xFFFFFFFF;
+static unsigned int	simulate_error_page = 0x1708;
+#endif
+
+/* ??PATCH bkana@leuze.com 2022-04-12 */
+#pragma GCC optimize ("O0")
 
 /* Define default oob placement schemes for large and small page devices */
 static int nand_ooblayout_ecc_sp(struct mtd_info *mtd, int section,
@@ -2614,6 +2636,8 @@ int nand_read_page_raw(struct nand_chip *chip, uint8_t *buf, int oob_required,
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	int ret;
+/* ??PATCH bkana@leuze.com 2022-04-04 */
+	unsigned int max_bitflips = 0;
 
 	ret = nand_read_page_op(chip, page, 0, buf, mtd->writesize);
 	if (ret)
@@ -2625,10 +2649,57 @@ int nand_read_page_raw(struct nand_chip *chip, uint8_t *buf, int oob_required,
 		if (ret)
 			return ret;
 	}
-
-	return 0;
+#ifdef NAND_SIMULATION
+	if (simulate_error_page == page)
+	{
+		return 0xF;
+	}
+#endif	
+	/* ??PATCH bkana@leuze.com 2022-04-04 */
+	//chip->legacy.cmdfunc(chip, TC58_ECC_READ_STATUS, -1, -1);
+	//max_bitflips = chip->legacy.read_byte(chip) & 0xf;
+	return max_bitflips;
 }
 EXPORT_SYMBOL(nand_read_page_raw);
+
+/* ??PATCH bkana@leuze.com 2022-04-05 */
+/**
+ * nand_read_page_flash - [INTERN] read raw page data without ecc
+ * @chip: nand chip info structure
+ * @buf: buffer to store read data
+ * @oob_required: caller requires OOB data read to chip->oob_poi
+ * @page: page number to read
+ *
+ * Not for syndrome calculating ECC controllers, which use a special oob layout.
+ */
+int nand_read_page_flash(struct nand_chip *chip, uint8_t *buf, int oob_required,
+		       int page)
+{
+	struct mtd_info *mtd = nand_to_mtd(chip);
+	int ret;
+	unsigned int max_bitflips = 0;
+
+	ret = nand_read_page_op(chip, page, 0, buf, mtd->writesize);
+	if (ret)
+		return ret;
+
+	if (oob_required) {
+		ret = nand_read_data_op(chip, chip->oob_poi, mtd->oobsize,
+					false);
+		if (ret)
+			return ret;
+	}
+#ifdef NAND_SIMULATION
+	if (simulate_error_page == page)
+	{
+		return 0xF;
+	}
+#endif	
+	chip->legacy.cmdfunc(chip, TC58_ECC_READ_STATUS, -1, -1);
+	max_bitflips = chip->legacy.read_byte(chip) & 0xf;
+	return max_bitflips;
+}
+EXPORT_SYMBOL(nand_read_page_flash);
 
 /**
  * nand_read_page_raw_syndrome - [INTERN] read raw page data without ecc
@@ -4845,6 +4916,7 @@ static const char * const nand_ecc_modes[] = {
 	[NAND_ECC_HW_SYNDROME]	= "hw_syndrome",
 	[NAND_ECC_HW_OOB_FIRST]	= "hw_oob_first",
 	[NAND_ECC_ON_DIE]	= "on-die",
+	[NAND_ECC_BENAND]	= "benand",
 };
 
 static int of_get_nand_ecc_mode(struct device_node *np)
@@ -5876,6 +5948,12 @@ int nand_scan_with_ids(struct nand_chip *chip, unsigned int maxchips,
 		       struct nand_flash_dev *ids)
 {
 	int ret;
+	/* ??PATCH bkana@leuze.com 2022-04-06 */
+	#ifdef DEBUGGING
+	__asm__ (
+	"reset : b reset"
+	);
+	#endif 
 
 	if (!maxchips)
 		return -EINVAL;
