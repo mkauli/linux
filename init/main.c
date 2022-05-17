@@ -575,11 +575,6 @@ void __init __weak arch_call_rest_init(void)
 
 asmlinkage __visible void __init start_kernel(void)
 {
-
-	//#??PATCH bkana@leuze.com 2022-04-07
-	__asm__(
-	"reset : b reset"
-	);
 	char *command_line;
 	char *after_dashes;
 
