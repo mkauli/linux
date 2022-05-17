@@ -45,26 +45,6 @@
 
 #include "internals.h"
 
-
-/* ??PATCH bkana@leuze.com 2022-04-04 */
-#define TC58_ECC_READ_STATUS		0x7a
-#define TC58_STATUS_READ			0x70
-#define TC58_READ					0x00
-
-/* ??PATCH bkana@leuze.com 2022-04-04 */
-//#define DEBUGGING 1
-
-/* ??PATCH bkana@leuze.com 2022-04-04 */
-#ifdef DEBUGGING
-#pragma GCC optimize ("O0")
-#define NAND_SIMULATION 1
-static unsigned int simulate_error_offset = 0xFFFFFFFF;
-static unsigned int	simulate_error_page = 0x1708;
-#endif
-
-/* ??PATCH bkana@leuze.com 2022-04-12 */
-#pragma GCC optimize ("O0")
-
 /* Define default oob placement schemes for large and small page devices */
 static int nand_ooblayout_ecc_sp(struct mtd_info *mtd, int section,
 				 struct mtd_oob_region *oobregion)
@@ -2634,8 +2614,6 @@ int nand_read_page_raw(struct nand_chip *chip, uint8_t *buf, int oob_required,
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	int ret;
-/* ??PATCH bkana@leuze.com 2022-04-04 */
-	unsigned int max_bitflips = 0;
 
 	ret = nand_read_page_op(chip, page, 0, buf, mtd->writesize);
 	if (ret)
@@ -2647,16 +2625,8 @@ int nand_read_page_raw(struct nand_chip *chip, uint8_t *buf, int oob_required,
 		if (ret)
 			return ret;
 	}
-#ifdef NAND_SIMULATION
-	if (simulate_error_page == page)
-	{
-		return 0xF;
-	}
-#endif	
-	/* ??PATCH bkana@leuze.com 2022-04-04 */
-	//chip->legacy.cmdfunc(chip, TC58_ECC_READ_STATUS, -1, -1);
-	//max_bitflips = chip->legacy.read_byte(chip) & 0xf;
-	return max_bitflips;
+
+	return 0;
 }
 EXPORT_SYMBOL(nand_read_page_raw);
 

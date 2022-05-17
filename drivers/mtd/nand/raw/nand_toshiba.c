@@ -8,9 +8,6 @@
 
 #include "internals.h"
 
-/* ??PATCH bkana@leuze.com 2022-04-04 */
-#pragma GCC optimize ("O0")
-
 /* Bit for detecting BENAND */
 #define TOSHIBA_NAND_ID4_IS_BENAND		BIT(7)
 
