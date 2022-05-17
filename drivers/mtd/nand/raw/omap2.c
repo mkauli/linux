@@ -2012,20 +2012,21 @@ static int omap_nand_attach_chip(struct nand_chip *chip)
 	if (!omap2_nand_ecc_check(info))
 		return -EINVAL;
 
+	/* ??PATCH dspindle@leuze.com 2022-05-17 */
+	if (info->ecc_opt == OMAP_ECC_NONE) {
+		/* Do not touch ecc.mode if OMAP_ECC_NONE was selected
+		 * ecc.mode is either already initialized to NAND_ECC_NONE
+		 * or was already modified by a specific NAND driver (e.g. 
+		 * for using on-die ECC)
+		 */
+		return 0;
+	}
 	/*
 	 * Bail out earlier to let NAND_ECC_SOFT code create its own
 	 * ooblayout instead of using ours.
 	 */
 	if (info->ecc_opt == OMAP_ECC_HAM1_CODE_SW) {
-		/* ??PATCH bkana@leuze.com 2022-04-12 */	
-		//chip->ecc.mode = NAND_ECC_SOFT;
-		//chip->ecc.algo = NAND_ECC_HAMMING;
-		chip->ecc.mode = NAND_ECC_ON_DIE;
-		return 0;
-	}
-	/* ??PATCH bkana@leuze.com 2020-04-15 */
-	if (info->ecc_opt == OMAP_ECC_NONE) {
-		chip->ecc.mode = NAND_ECC_NONE;
+		chip->ecc.mode = NAND_ECC_SOFT;
 		chip->ecc.algo = NAND_ECC_HAMMING;
 		return 0;
 	}
