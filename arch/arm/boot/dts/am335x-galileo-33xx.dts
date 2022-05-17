@@ -144,30 +144,33 @@
 		interrupts = <0 IRQ_TYPE_NONE>, /* fifoevent */
 			     <1 IRQ_TYPE_NONE>;	/* termcount */
 		rb-gpios = <&gpmc 0 GPIO_ACTIVE_HIGH>; /* gpmc_wait0 */
-		/* ti,elm-id = <&elm>; */
-		ti,nand-ecc-opt = "sw";
-		
+
+		ti,nand-ecc-opt = "none";
+		nand-ecc-mode = "on-die";
+
 		nand-bus-width = <8>;
+		gpmc,device-nand = "true";
 		gpmc,device-width = <1>;
 		gpmc,sync-clk-ps = <0>;
 		gpmc,cs-on-ns = <0>;
-		gpmc,cs-rd-off-ns = <44>;
-		gpmc,cs-wr-off-ns = <44>;
-		gpmc,adv-on-ns = <6>;
+		gpmc,cs-rd-off-ns = <40>;
+		gpmc,cs-wr-off-ns = <40>;
+		gpmc,adv-on-ns = <0>;
 		gpmc,adv-rd-off-ns = <34>;
-		gpmc,adv-wr-off-ns = <44>;
-		gpmc,we-on-ns = <0>;
-		gpmc,we-off-ns = <40>;
-		gpmc,oe-on-ns = <0>;
-		gpmc,oe-off-ns = <54>;
-		gpmc,access-ns = <64>;
-		gpmc,rd-cycle-ns = <82>;
-		gpmc,wr-cycle-ns = <82>;
+		gpmc,adv-wr-off-ns = <40>;
+		gpmc,we-on-ns = <10>;
+		gpmc,we-off-ns = <35>;
+		gpmc,oe-on-ns = <10>;
+		gpmc,oe-off-ns = <30>;
+		gpmc,access-ns = <35>;
+		gpmc,rd-cycle-ns = <40>;
+		gpmc,wr-cycle-ns = <50>;
 		gpmc,bus-turnaround-ns = <0>;
 		gpmc,cycle2cycle-delay-ns = <0>;
 		gpmc,clk-activation-ns = <0>;
-		gpmc,wr-access-ns = <40>;
+		gpmc,wr-access-ns = <30>;
 		gpmc,wr-data-mux-bus-ns = <0>;
+
 		/* MTD partition table */
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -196,44 +199,24 @@
 			reg = <0x00180000 0x00100000>;
 		};
 		partition@6 {
-			label = "res3";
+			label = "u-boot1";
 			reg = <0x00280000 0x00100000>;
 		};
 		partition@7 {
 			label = "u-boot-env0";
-			reg = <0x00380000 0x00020000>;
+			reg = <0x00380000 0x00080000>;
 		};
 		partition@8 {
 			label = "u-boot-env1";
-			reg = <0x003A0000 0x00020000>;
+			reg = <0x00400000 0x00080000>;
 		};
 		partition@9 {
-			label = "res4";
-			reg = <0x003C0000 0x00040000>;
+			label = "res3";
+			reg = <0x00480000 0x00080000>;
 		};
 		partition@10 {
-			label = "kernelA";
-			reg = <0x00400000 0x00600000>;
-		};
-		partition@11 {
-			label = "kernelB";
-			reg = <0x00A00000 0x00600000>;
-		};
-		partition@12 {
-			label = "dtbA";
-			reg = <0x01000000 0x00040000>;
-		};
-		partition@13 {
-			label = "dtbB";
-			reg = <0x01040000 0x00040000>;
-		};
-		partition@14 {
-			label = "res5";
-			reg = <0x01080000 0x00180000>;
-		};
-		partition@15 {
 			label = "ubi";
-			reg = <0x01200000 0>;
+			reg = <0x00500000 0>;
 		};
 	};
 };

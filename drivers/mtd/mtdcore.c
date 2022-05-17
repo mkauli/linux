@@ -1262,10 +1262,9 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	if (unlikely(ret_code < 0))
 		return ret_code;
 
-/* ??PATCH bkana@leuze.com 2020-04-12 */
-	//if (mtd->ecc_strength == 0)
+	if (mtd->ecc_strength == 0)
 		return 0;	/* device lacks ecc */
-	//return ret_code >= mtd->bitflip_threshold ? -EUCLEAN : 0;
+	return ret_code >= mtd->bitflip_threshold ? -EUCLEAN : 0;
 }
 EXPORT_SYMBOL_GPL(mtd_read_oob);
 

@@ -23,7 +23,11 @@ enum omap_ecc {
 	 * ECC stored at end of spare area
 	 */
 	OMAP_ECC_HAM1_CODE_SW = 0,
-
+	/* ??PATCH dspindle@leuze.com 2022-05-17 */
+	/* no OMAP specific ECC calculation or correction is used,
+	 * ECC may be handled by the NAND itself (on-die)
+	 */
+	OMAP_ECC_NONE,
 	/*
 	 * 1-bit ECC: calculation by GPMC, Error detection by Software
 	 * ECC layout compatible with ROM code layout
