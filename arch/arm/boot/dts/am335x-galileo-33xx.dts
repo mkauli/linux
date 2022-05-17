@@ -157,8 +157,8 @@
 		gpmc,adv-on-ns = <6>;
 		gpmc,adv-rd-off-ns = <34>;
 		gpmc,adv-wr-off-ns = <44>;
-		gpmc,we-on-ns = <0>;
-		gpmc,we-off-ns = <40>;
+		gpmc,we-on-ns = <10>;
+		gpmc,we-off-ns = <35>;
 		gpmc,oe-on-ns = <0>;
 		gpmc,oe-off-ns = <54>;
 		gpmc,access-ns = <64>;
